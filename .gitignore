@@ -1,0 +1,27 @@
+# -----------------------------
+# Secrets & Credentials (CRITICAL)
+# -----------------------------
+.env
+client_secret.json
+
+# -----------------------------
+# PyInstaller Build Outputs
+# -----------------------------
+build/
+dist/
+
+# -----------------------------
+# Python Virtual Environments
+# -----------------------------
+.venv/
+
+# -----------------------------
+# Byte-compiled / Optimized / DLL files
+# -----------------------------
+__pycache__/
+
+
+# -----------------------------
+# IDEs and Editors
+# -----------------------------
+.vscode/
