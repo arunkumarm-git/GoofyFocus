@@ -1057,7 +1057,7 @@ class MainWindow(QWidget):
                 "https://www.googleapis.com/auth/userinfo.email",
                 "https://www.googleapis.com/auth/userinfo.profile",
             ]
-            flow  = InstalledAppFlow.from_client_secrets_file("client_secret.json", SCOPES)
+            flow  = InstalledAppFlow.from_client_secrets_file(".secrets/client_secret.json", SCOPES)
             creds = flow.run_local_server(port=0)
 
             session = google.auth.transport.requests.AuthorizedSession(creds)

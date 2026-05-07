@@ -2,7 +2,7 @@
 # Secrets & Credentials (CRITICAL)
 # -----------------------------
 .env
-client_secret.json
+.secrets/
 
 # -----------------------------
 # PyInstaller Build Outputs
