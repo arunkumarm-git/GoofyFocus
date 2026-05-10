@@ -109,7 +109,8 @@ class BreakOverlayWindow(QWidget):
         # phase tag
         phase_tag = QLabel(self.controller.phase.upper())
         phase_tag.setFont(QFont("Segoe UI", 10))
-        phase_tag.setStyleSheet("color: rgba(255,255,255,45); letter-spacing: 3px;")
+        # Increased alpha to 160 and tracking to 4px
+        phase_tag.setStyleSheet("color: rgba(255,255,255,160); letter-spacing: 4px;")
         phase_tag.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(phase_tag)
 
@@ -144,7 +145,8 @@ class BreakOverlayWindow(QWidget):
         # subtitle
         sub = QLabel(self._subtitle)
         sub.setFont(QFont("Segoe UI", 13, QFont.Weight.Light))
-        sub.setStyleSheet("color: rgba(255,255,255,90);")
+        # Increased alpha to 170
+        sub.setStyleSheet("color: rgba(255,255,255,170);")
         sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(sub)
 
@@ -171,7 +173,7 @@ class BreakOverlayWindow(QWidget):
 
         hint = QLabel("esc · skip")
         hint.setFont(QFont("Segoe UI", 11))
-        hint.setStyleSheet("color: rgba(255,255,255,35);")
+        hint.setStyleSheet("color: rgba(255,255,255,80);")
         bottom.addWidget(hint)
 
         layout.addLayout(bottom)
@@ -189,15 +191,20 @@ class BreakOverlayWindow(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         grad = QLinearGradient(0, 0, 0, self.height())
+        
         if self.controller.phase == "Long Break":
-            grad.setColorAt(0, QColor(6,  8, 22, 240))
-            grad.setColorAt(1, QColor(8, 10, 30, 240))
+            # Deeper navy
+            grad.setColorAt(0, QColor(8,  12, 38, 245))
+            grad.setColorAt(1, QColor(5,   8, 28, 245))
         elif self.controller.phase == "Short Break":
-            grad.setColorAt(0, QColor(4,  16, 14, 236))
-            grad.setColorAt(1, QColor(6,  22, 18, 236))
+            # Deeper teal
+            grad.setColorAt(0, QColor(5,  30, 26, 245))
+            grad.setColorAt(1, QColor(3,  20, 18, 245))
         else:
-            grad.setColorAt(0, QColor(8,  6, 18, 236))
-            grad.setColorAt(1, QColor(12, 8, 24, 236))
+            # Fallback
+            grad.setColorAt(0, QColor(8,   6, 18, 236))
+            grad.setColorAt(1, QColor(12,  8, 24, 236))
+            
         p.fillRect(self.rect(), QBrush(grad))
         p.end()
 

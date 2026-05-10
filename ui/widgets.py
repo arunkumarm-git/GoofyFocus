@@ -56,16 +56,17 @@ class CircularTimer(QWidget):
         )
         cx, cy = w / 2, h / 2
 
-        # track
-        track_pen = QPen(QColor(255, 255, 255, 14), size * 0.038)
+        # Get phase colors early so we can use them for both the arc and the label
+        c1, c2 = PHASE_COLORS.get(self._phase, ("#c084fc", "#f472b6"))
+        col1, col2 = QColor(c1), QColor(c2)
+
+        # track - Increased alpha from 14 to 28 for better visibility
+        track_pen = QPen(QColor(255, 255, 255, 28), size * 0.038)
         track_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         p.setPen(track_pen)
         p.drawEllipse(rect)
 
         # progress arc
-        c1, c2 = PHASE_COLORS.get(self._phase, ("#c084fc", "#f472b6"))
-        col1, col2 = QColor(c1), QColor(c2)
-
         if self._progress > 0.002:
             span_deg = self._progress * 360
             span_val = -int(span_deg * 16)
@@ -107,10 +108,14 @@ class CircularTimer(QWidget):
         p.drawText(QRectF(0, cy - size * 0.13, w, size * 0.22),
                    Qt.AlignmentFlag.AlignCenter, self._time_text)
 
-        # phase label
+        # phase label - Now uses the phase color (c1) instead of static white
         lbl_font = QFont("Segoe UI", int(size * 0.058))
         p.setFont(lbl_font)
-        p.setPen(QColor(255, 255, 255, 160))
+        
+        lbl_col = QColor(c1)
+        lbl_col.setAlpha(180)
+        p.setPen(lbl_col)
+        
         p.drawText(QRectF(0, cy + size * 0.10, w, size * 0.10),
                    Qt.AlignmentFlag.AlignCenter, self._phase.upper())
 
@@ -138,32 +143,43 @@ class Card(QWidget):
 # ──────────────────────────────────────────────
 # DURATION SPIN  (min + sec)
 # ──────────────────────────────────────────────
+# ──────────────────────────────────────────────
+# DURATION SPIN  (min + sec)
+# ──────────────────────────────────────────────
 class DurationSpin(QWidget):
-    """A compact paired spinner: MM min  SS sec  → returns total seconds."""
-
     def __init__(self, default_secs: int, parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(6)
 
         spin_style = """
             QSpinBox {
-                background: rgba(255,255,255,6);
-                border: 1px solid rgba(255,255,255,14);
-                border-radius: 7px;
-                padding: 3px 6px;
-                color: rgba(255,255,255,190);
-                font-size: 11px;
-                min-width: 44px; max-width: 52px;
+                background: rgba(255,255,255,8);
+                border: 1px solid rgba(192,132,252,90);
+                border-radius: 6px;
+                padding: 2px 4px;
+                color: #e8dff5;
+                font-size: 12px;
+                font-weight: 500;
+                min-width: 32px;
+                max-width: 38px;
+            }
+            QSpinBox:focus {
+                border-color: rgba(192,132,252,200);
             }
             QSpinBox::up-button, QSpinBox::down-button {
-                background: rgba(255,255,255,10);
-                border: none; width: 12px;
+                width: 0px;
+                border: none;
             }
         """
-        unit_style = "color: rgba(255,255,255,120); font-size: 10px; font-family: 'Segoe UI';"
+        unit_style = (
+            "color: rgba(167,139,218,160);"
+            "font-size: 11px;"
+            "font-family: 'Segoe UI';"
+            "background: transparent;"
+        )
 
         default_m = default_secs // 60
         default_s = default_secs  % 60
