@@ -1,9 +1,10 @@
 # ui/break_overlay.py
 import os
 import random
+import json
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 from PyQt6.QtCore import Qt, QTimer, QSize, QUrl, QSettings
-from PyQt6.QtGui import QFont, QMovie, QPainter, QColor, QBrush, QLinearGradient
+from PyQt6.QtGui import QFont, QMovie, QPainter, QColor, QBrush, QLinearGradient, QPainterPath
 from controller import TimerController
 
 try:
@@ -11,6 +12,14 @@ try:
     HAS_AUDIO = True
 except ImportError:
     HAS_AUDIO = False
+
+# ── Design tokens (matching app.py) ──────────────────
+BG_0      = "#161514"
+BG_1      = "#1c1b19"
+ACCENT     = "#849d8a"
+TEXT_HI    = "rgba(255,255,255,235)"
+TEXT_MID   = "rgba(255,255,255,140)"
+TEXT_LOW   = "rgba(255,255,255,76)"
 
 # ──────────────────────────────────────────────
 # BREAK OVERLAY
@@ -56,8 +65,10 @@ class BreakOverlayWindow(QWidget):
         if getattr(self, '_is_pro', False):
             short_raw = s.value("custom_messages_short", "[]")
             long_raw  = s.value("custom_messages_long",  "[]")
-            custom_short = json.loads(short_raw) if short_raw else []
-            custom_long  = json.loads(long_raw)  if long_raw  else []
+            try:
+                custom_short = json.loads(short_raw) if short_raw else []
+                custom_long  = json.loads(long_raw)  if long_raw  else []
+            except Exception: custom_short = custom_long = []
         else:
             custom_short = custom_long = []
 
@@ -65,10 +76,7 @@ class BreakOverlayWindow(QWidget):
         pool_long  = custom_long  if custom_long  else BREAK_MESSAGES["Long Break"]
         
         msgs = pool_long if self.controller.phase == "Long Break" else pool_short
-        
-        # Guard against empty custom lists saving an empty state
-        if not msgs: 
-            msgs = BREAK_MESSAGES["Short Break"]
+        if not msgs: msgs = BREAK_MESSAGES["Short Break"]
             
         self._headline, self._subtitle = random.choice(msgs)
 
@@ -82,15 +90,12 @@ class BreakOverlayWindow(QWidget):
             self._audio_out.setVolume(0.7)
             self._player.setSource(QUrl.fromLocalFile(os.path.abspath(self._sound_path)))
             self._player.play()
-        except Exception:
-            pass
+        except Exception: pass
 
     def _stop_sound(self):
         if self._player:
-            try:
-                self._player.stop()
-            except Exception:
-                pass
+            try: self._player.stop()
+            except Exception: pass
 
     # ── build ─────────────────────────────────
     def _init_ui(self):
@@ -103,21 +108,20 @@ class BreakOverlayWindow(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setSpacing(24)
-        layout.setContentsMargins(80, 60, 80, 60)
+        layout.setSpacing(20)
+        layout.setContentsMargins(40, 40, 40, 40)
 
         # phase tag
         phase_tag = QLabel(self.controller.phase.upper())
-        phase_tag.setFont(QFont("Segoe UI", 10))
-        # Increased alpha to 160 and tracking to 4px
-        phase_tag.setStyleSheet("color: rgba(255,255,255,160); letter-spacing: 4px;")
+        phase_tag.setFont(QFont("DM Mono", 10))
+        phase_tag.setStyleSheet(f"color: {ACCENT}; font-weight: 500; background: transparent;")
         phase_tag.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(phase_tag)
 
         # headline
         hl = QLabel(self._headline)
-        hl.setFont(QFont("Segoe UI", 36, QFont.Weight.Light))
-        hl.setStyleSheet("color: rgba(255,255,255,220);")
+        hl.setFont(QFont("DM Sans", 42, QFont.Weight.Light))
+        hl.setStyleSheet(f"color: {TEXT_HI}; font-weight: 300; background: transparent;")
         hl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(hl)
 
@@ -125,55 +129,55 @@ class BreakOverlayWindow(QWidget):
         self.gif_label = QLabel()
         if self._gif_path and os.path.exists(self._gif_path):
             self.movie = QMovie(self._gif_path)
-            self.movie.setScaledSize(QSize(320, 320))
+            self.movie.setScaledSize(QSize(360, 360))
             self.gif_label.setMovie(self.movie)
             self.movie.start()
         else:
             self.gif_label.setText("◡")
-            self.gif_label.setFont(QFont("Segoe UI", 72, QFont.Weight.Light))
-            self.gif_label.setStyleSheet("color: rgba(255,255,255,80);")
+            self.gif_label.setFont(QFont("DM Sans", 80, QFont.Weight.Light))
+            self.gif_label.setStyleSheet(f"color: {TEXT_LOW}; background: transparent;")
         self.gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.gif_label)
 
         # countdown
         self.timer_label = QLabel("00:00")
-        self.timer_label.setFont(QFont("Segoe UI", 72, QFont.Weight.Light))
-        self.timer_label.setStyleSheet("color: rgba(255,255,255,190); letter-spacing: -2px;")
+        self.timer_label.setFont(QFont("DM Mono", 72, QFont.Weight.Light))
+        if self.timer_label.font().exactMatch(): self.timer_label.font().setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, -3)
+        self.timer_label.setStyleSheet(f"color: {TEXT_HI}; font-weight: 300; background: transparent;")
         self.timer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.timer_label)
 
         # subtitle
         sub = QLabel(self._subtitle)
-        sub.setFont(QFont("Segoe UI", 13, QFont.Weight.Light))
-        # Increased alpha to 170
-        sub.setStyleSheet("color: rgba(255,255,255,170);")
+        sub.setFont(QFont("DM Sans", 14, QFont.Weight.Light))
+        sub.setStyleSheet(f"color: {TEXT_MID}; font-weight: 300; background: transparent;")
         sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(sub)
 
         # bottom row — mute toggle + skip hint
         bottom = QHBoxLayout()
         bottom.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        bottom.setSpacing(28)
+        bottom.setSpacing(32)
 
-        self.btn_mute = QPushButton("🔇 mute" if not self.muted else "🔊 unmute")
-        self.btn_mute.setStyleSheet("""
-            QPushButton {
-                background: rgba(255,255,255,8);
-                color: rgba(255,255,255,80);
-                border: 1px solid rgba(255,255,255,14);
-                border-radius: 16px;
-                padding: 6px 18px;
-                font-size: 11px;
-                font-family: 'Segoe UI';
-            }
-            QPushButton:hover { background: rgba(255,255,255,15); color: rgba(255,255,255,140); }
+        self.btn_mute = QPushButton("🔊 mute" if not self.muted else "🔇 unmute")
+        self.btn_mute.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(255,255,255,13);
+                color: {TEXT_MID};
+                border: 1px solid rgba(255,255,255,25);
+                border-radius: 18px;
+                padding: 8px 24px;
+                font-size: 12px;
+                font-family: 'DM Sans';
+            }}
+            QPushButton:hover {{ background: rgba(255,255,255,25); color: {TEXT_HI}; }}
         """)
         self.btn_mute.clicked.connect(self._toggle_mute)
         bottom.addWidget(self.btn_mute)
 
         hint = QLabel("esc · skip")
-        hint.setFont(QFont("Segoe UI", 11))
-        hint.setStyleSheet("color: rgba(255,255,255,80);")
+        hint.setFont(QFont("DM Mono", 11))
+        hint.setStyleSheet(f"color: {TEXT_LOW}; background: transparent;")
         bottom.addWidget(hint)
 
         layout.addLayout(bottom)
@@ -182,64 +186,49 @@ class BreakOverlayWindow(QWidget):
         self.muted = not self.muted
         if self.muted:
             self._stop_sound()
-            self.btn_mute.setText("🔊 unmute")
+            self.btn_mute.setText("🔇 unmute")
         else:
-            self.btn_mute.setText("🔇 mute")
+            self.btn_mute.setText("🔊 mute")
             self._play_sound()
 
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        grad = QLinearGradient(0, 0, 0, self.height())
+        
+        # Redesign uses very deep, almost opaque dark earthy tones
+        bg = QLinearGradient(0, 0, 0, self.height())
         
         if self.controller.phase == "Long Break":
-            # Deeper navy
-            grad.setColorAt(0, QColor(8,  12, 38, 245))
-            grad.setColorAt(1, QColor(5,   8, 28, 245))
+            bg.setColorAt(0, QColor(15, 15, 19, 252))
+            bg.setColorAt(1, QColor(8, 8, 10, 252))
         elif self.controller.phase == "Short Break":
-            # Deeper teal
-            grad.setColorAt(0, QColor(5,  30, 26, 245))
-            grad.setColorAt(1, QColor(3,  20, 18, 245))
+            bg.setColorAt(0, QColor(20, 20, 28, 252))
+            bg.setColorAt(1, QColor(10, 10, 14, 252))
         else:
-            # Fallback
-            grad.setColorAt(0, QColor(8,   6, 18, 236))
-            grad.setColorAt(1, QColor(12,  8, 24, 236))
+            bg.setColorAt(0, QColor(26, 27, 38, 252))
+            bg.setColorAt(1, QColor(16, 16, 22, 252))
             
-        p.fillRect(self.rect(), QBrush(grad))
+        p.fillRect(self.rect(), QBrush(bg))
         p.end()
 
     def _update_timer(self, secs: int):
-        """Update timer display; safely handle widget destruction."""
         try:
-            # Check if widget is still valid (not destroyed)
-            if not self.isVisible():
-                return
+            if not self.isVisible(): return
             m, s = divmod(secs, 60)
             self.timer_label.setText(f"{m:02d}:{s:02d}")
-        except RuntimeError:
-            # Widget was destroyed; signal is being processed during cleanup
-            pass
-        except Exception as e:
-            print(f"[ERROR] Timer update failed: {e}")
+        except Exception: pass
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:
             self._stop_sound()
-            # Disconnect the tick signal before closing to prevent stale updates
-            try:
-                self.controller.tick.disconnect(self._update_timer)
-            except Exception:
-                pass
+            try: self.controller.tick.disconnect(self._update_timer)
+            except Exception: pass
             self.close()
-            # Queue skip to allow overlay close to complete first (avoid re-entrant phase change)
             QTimer.singleShot(100, self.controller.skip)
 
     def closeEvent(self, event):
-        """Clean up resources when overlay is closing."""
         self._stop_sound()
-        # Disconnect all signals to prevent orphaned connections
-        try:
-            self.controller.tick.disconnect(self._update_timer)
-        except Exception:
-            pass
+        try: self.controller.tick.disconnect(self._update_timer)
+        except Exception: pass
         super().closeEvent(event)
+

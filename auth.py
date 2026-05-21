@@ -25,13 +25,18 @@ def save_cached_user(user_info):
 
 def perform_login():
     """Handles Google OAuth and Supabase upsert."""
+    secret_path = ".secrets/client_secret.json"
+    if not os.path.exists(secret_path):
+        print(f"[auth] Error: Missing {secret_path}")
+        raise FileNotFoundError("Google client secret file missing.")
+
     SCOPES = [
         "openid",
         "https://www.googleapis.com/auth/userinfo.email",
         "https://www.googleapis.com/auth/userinfo.profile",
     ]
-    flow  = InstalledAppFlow.from_client_secrets_file(".secrets/client_secret.json", SCOPES)
-    creds = flow.run_local_server(port=0)
+    flow  = InstalledAppFlow.from_client_secrets_file(secret_path, SCOPES)
+    creds = flow.run_local_server(port=0, host="127.0.0.1")
 
     session = google.auth.transport.requests.AuthorizedSession(creds)
     info    = session.get("https://www.googleapis.com/oauth2/v2/userinfo").json()

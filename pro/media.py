@@ -1,17 +1,31 @@
 # pro/media.py
 import os
 import shutil
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QFileDialog
+import stat
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QFileDialog, QApplication
 from PyQt6.QtCore import Qt, QRectF
-from PyQt6.QtGui import QPainter, QColor, QPainterPath, QLinearGradient, QBrush, QPen
+from PyQt6.QtGui import QPainter, QColor, QPainterPath, QLinearGradient, QBrush, QPen, QFont
 from assets import USER_GIFS_DIR, USER_SOUNDS_DIR
 
-# GifPackManager: allows pro users to add folders of gifs that can be randomly shown on the break overlay.  Each folder is treated as a separate pack, and all gifs within are used.  If not pro, shows a lock and hides the UI.
+# ── Design tokens (matching app.py) ──────────────────
+BG_0      = "#161514"
+BG_1      = "#1c1b19"
+ACCENT     = "#849d8a"
+TEXT_HI    = "rgba(255,255,255,235)"
+TEXT_MID   = "rgba(255,255,255,140)"
+TEXT_LOW   = "rgba(255,255,255,76)"
+BORDER     = "rgba(255,255,255,20)"
+
+def remove_readonly(func, path, excinfo):
+    """Clear the readonly bit and reattempt the file deletion."""
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
 class GifPackManager(QWidget):
     def __init__(self, is_pro: bool, parent=None):
         super().__init__(parent)
         self._is_pro = is_pro
-        self.setFixedSize(380, 420)
+        self.setFixedSize(420, 480)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self._build_ui()
@@ -25,41 +39,54 @@ class GifPackManager(QWidget):
 
         # Title bar
         tb = QHBoxLayout()
-        title = QLabel("custom gif packs")
-        title.setStyleSheet("color: rgba(255,255,255,180); font-size: 13px; font-family: 'Segoe UI';")
+        title = QLabel("gif packs")
+        title.setFont(QFont("DM Mono", 12))
+        title.setStyleSheet(f"color: {TEXT_HI}; background: transparent;")
         tb.addWidget(title)
         tb.addStretch()
         close_btn = QPushButton("×")
-        close_btn.setFixedSize(22, 22)
-        close_btn.setStyleSheet("QPushButton { background: transparent; color: rgba(255,255,255,60); border: none; font-size: 16px; } QPushButton:hover { color: white; }")
+        close_btn.setFixedSize(24, 24)
+        close_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {TEXT_LOW}; border: none; font-size: 20px; }} "
+            f"QPushButton:hover {{ color: {TEXT_HI}; }}")
         close_btn.clicked.connect(self.close)
         tb.addWidget(close_btn)
         root.addLayout(tb)
 
         if not self._is_pro:
-            lock = QLabel("🔒 unlock unlimited gif packs with pro")
+            lock = QLabel("🔒 unlock gif packs with pro")
             lock.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lock.setStyleSheet("color: rgba(192,132,252,200); font-size: 11px; font-family: 'Segoe UI'; background: rgba(192,132,252,0.1); padding: 20px; border-radius: 8px;")
+            lock.setFont(QFont("DM Sans", 11))
+            lock.setStyleSheet(f"color: {ACCENT}; background: rgba(132,157,138,25); padding: 20px; border-radius: 10px; border: 1px solid rgba(132,157,138,51);")
             root.addWidget(lock)
             root.addStretch()
             return
 
-        # Pro UI
         self.list_w = QListWidget()
-        self.list_w.setStyleSheet("""
-            QListWidget { background: rgba(255,255,255,6); border: 1px solid rgba(255,255,255,14); border-radius: 8px; padding: 6px; color: white; font-size: 12px; }
-            QListWidget::item { padding: 8px; border-bottom: 1px solid rgba(255,255,255,5); }
-            QListWidget::item:selected { background: rgba(192,132,252,40); border-radius: 4px; }
+        self.list_w.setStyleSheet(f"""
+            QListWidget {{ 
+                background: rgba(255,255,255,8); 
+                border: 1px solid {BORDER}; 
+                border-radius: 10px; 
+                padding: 6px; 
+                color: {TEXT_MID}; 
+                font-size: 12px;
+                font-family: 'DM Sans';
+            }}
+            QListWidget::item {{ padding: 10px; border-bottom: 1px solid rgba(255,255,255,5); }}
+            QListWidget::item:selected {{ background: rgba(132,157,138,38); color: {TEXT_HI}; border-radius: 6px; }}
         """)
         root.addWidget(self.list_w)
 
         btn_row = QHBoxLayout()
         btn_add = QPushButton("+ add folder")
-        btn_add.setStyleSheet("QPushButton { background: rgba(192,132,252,0.2); color: #d8b4fe; border-radius: 6px; padding: 8px; font-size: 11px;} QPushButton:hover { background: rgba(192,132,252,0.4); }")
+        btn_add.setFixedHeight(36)
+        btn_add.setStyleSheet(f"QPushButton {{ background: rgba(132,157,138,38); color: {ACCENT}; border-radius: 10px; padding: 0 16px; font-size: 11px; font-family: 'DM Sans'; }} QPushButton:hover {{ background: rgba(132,157,138,64); color: white; }}")
         btn_add.clicked.connect(self._add_folder)
         
         btn_del = QPushButton("delete selected")
-        btn_del.setStyleSheet("QPushButton { background: rgba(255,255,255,10); color: rgba(255,255,255,120); border-radius: 6px; padding: 8px; font-size: 11px;} QPushButton:hover { background: rgba(255,100,100,40); color: #ffaaaa; }")
+        btn_del.setFixedHeight(36)
+        btn_del.setStyleSheet(f"QPushButton {{ background: rgba(255,255,255,13); color: {TEXT_LOW}; border-radius: 10px; padding: 0 16px; font-size: 11px; font-family: 'DM Sans'; }} QPushButton:hover {{ background: rgba(255,100,100,25); color: #ffaaaa; }}")
         btn_del.clicked.connect(self._delete_folder)
         
         btn_row.addWidget(btn_add)
@@ -75,50 +102,58 @@ class GifPackManager(QWidget):
 
     def _add_folder(self):
         path = QFileDialog.getExistingDirectory(self, "Select Folder Containing GIFs")
-        if not path:
-            return
-        
+        if not path: return
         folder_name = os.path.basename(path)
         dest = os.path.join(USER_GIFS_DIR, folder_name)
-        
-        if os.path.exists(dest):
-            return # Already added
-            
+        if os.path.exists(dest): return
         try:
             shutil.copytree(path, dest)
             self._refresh_list()
-        except Exception as e:
-            print(f"[GIF Manager] Failed to copy folder: {e}")
+        except Exception as e: print(f"[GIF Manager] Copy failed: {e}")
 
     def _delete_folder(self):
-        for item in self.list_w.selectedItems():
-            folder_name = item.text()
-            target = os.path.join(USER_GIFS_DIR, folder_name)
+        selected = self.list_w.selectedItems()
+        # Fallback: if nothing is "selected" but an item is "focused" (currentItem)
+        if not selected and self.list_w.currentItem():
+            selected = [self.list_w.currentItem()]
+            
+        if not selected: return
+        for item in selected:
+            target = os.path.join(USER_GIFS_DIR, item.text())
             try:
-                shutil.rmtree(target)
-                self._refresh_list()
-            except Exception as e:
-                print(f"[GIF Manager] Failed to delete folder: {e}")
+                if os.path.isdir(target):
+                    shutil.rmtree(target, onerror=remove_readonly)
+            except Exception as e: print(f"[GIF Manager] Delete failed: {e}")
+        self._refresh_list()
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+
+    def mouseMoveEvent(self, e):
+        if e.buttons() == Qt.MouseButton.LeftButton and hasattr(self, '_drag_pos') and self._drag_pos:
+            self.move(e.globalPosition().toPoint() - self._drag_pos)
+
+    def mouseReleaseEvent(self, e): self._drag_pos = None
 
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         path = QPainterPath()
-        path.addRoundedRect(QRectF(self.rect()), 16, 16)
+        path.addRoundedRect(QRectF(self.rect()), 20, 20)
         bg = QLinearGradient(0, 0, 0, self.height())
-        bg.setColorAt(0, QColor(16, 13, 26, 252))
-        bg.setColorAt(1, QColor(10, 8, 20, 252))
+        bg.setColorAt(0, QColor(BG_1))
+        bg.setColorAt(1, QColor(BG_0))
         p.fillPath(path, QBrush(bg))
-        p.setPen(QPen(QColor(255, 255, 255, 18), 1))
+        p.setPen(QPen(QColor(255, 255, 255, 20), 1))
         p.drawPath(path)
         p.end()
 
-# SoundManagerWindow: allows pro users to add custom sound files that can be played during breaks.  If not pro, shows a lock and hides the UI.
 class SoundManagerWindow(QWidget):
     def __init__(self, is_pro: bool, parent=None):
         super().__init__(parent)
         self._is_pro = is_pro
-        self.setFixedSize(380, 420)
+        self.setFixedSize(420, 480)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self._build_ui()
@@ -130,15 +165,15 @@ class SoundManagerWindow(QWidget):
         root.setContentsMargins(24, 20, 24, 20)
         root.setSpacing(16)
 
-        # Title bar
         tb = QHBoxLayout()
-        title = QLabel("custom sounds")
-        title.setStyleSheet("color: rgba(255,255,255,180); font-size: 13px; font-family: 'Segoe UI';")
+        title = QLabel("ambient sounds")
+        title.setFont(QFont("DM Mono", 12))
+        title.setStyleSheet(f"color: {TEXT_HI}; background: transparent;")
         tb.addWidget(title)
         tb.addStretch()
         close_btn = QPushButton("×")
-        close_btn.setFixedSize(22, 22)
-        close_btn.setStyleSheet("QPushButton { background: transparent; color: rgba(255,255,255,60); border: none; font-size: 16px; } QPushButton:hover { color: white; }")
+        close_btn.setFixedSize(24, 24)
+        close_btn.setStyleSheet(f"QPushButton {{ background: transparent; color: {TEXT_LOW}; border: none; font-size: 20px; }} QPushButton:hover {{ color: {TEXT_HI}; }}")
         close_btn.clicked.connect(self.close)
         tb.addWidget(close_btn)
         root.addLayout(tb)
@@ -146,28 +181,38 @@ class SoundManagerWindow(QWidget):
         if not self._is_pro:
             lock = QLabel("🔒 unlock custom sounds with pro")
             lock.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lock.setStyleSheet("color: rgba(192,132,252,200); font-size: 11px; font-family: 'Segoe UI'; background: rgba(192,132,252,0.1); padding: 20px; border-radius: 8px;")
+            lock.setFont(QFont("DM Sans", 11))
+            lock.setStyleSheet(f"color: {ACCENT}; background: rgba(132,157,138,25); padding: 20px; border-radius: 10px; border: 1px solid rgba(132,157,138,51);")
             root.addWidget(lock)
             root.addStretch()
             return
 
-        # Pro UI
         self.list_w = QListWidget()
-        self.list_w.setStyleSheet("""
-            QListWidget { background: rgba(255,255,255,6); border: 1px solid rgba(255,255,255,14); border-radius: 8px; padding: 6px; color: white; font-size: 12px; }
-            QListWidget::item { padding: 8px; border-bottom: 1px solid rgba(255,255,255,5); }
-            QListWidget::item:selected { background: rgba(192,132,252,40); border-radius: 4px; }
+        self.list_w.setStyleSheet(f"""
+            QListWidget {{ 
+                background: rgba(255,255,255,8); 
+                border: 1px solid {BORDER}; 
+                border-radius: 10px; 
+                padding: 6px; 
+                color: {TEXT_MID}; 
+                font-size: 12px;
+                font-family: 'DM Sans';
+            }}
+            QListWidget::item {{ padding: 10px; border-bottom: 1px solid rgba(255,255,255,5); }}
+            QListWidget::item:selected {{ background: rgba(132,157,138,38); color: {TEXT_HI}; border-radius: 6px; }}
         """)
         root.addWidget(self.list_w)
 
         btn_row = QHBoxLayout()
-        btn_add = QPushButton("+ add sounds")
-        btn_add.setStyleSheet("QPushButton { background: rgba(192,132,252,0.2); color: #d8b4fe; border-radius: 6px; padding: 8px; font-size: 11px;} QPushButton:hover { background: rgba(192,132,252,0.4); }")
-        btn_add.clicked.connect(self._add_sounds)
+        btn_add = QPushButton("+ add .mp3")
+        btn_add.setFixedHeight(36)
+        btn_add.setStyleSheet(f"QPushButton {{ background: rgba(132,157,138,38); color: {ACCENT}; border-radius: 10px; padding: 0 16px; font-size: 11px; font-family: 'DM Sans'; }} QPushButton:hover {{ background: rgba(132,157,138,64); color: white; }}")
+        btn_add.clicked.connect(self._add_file)
         
         btn_del = QPushButton("delete selected")
-        btn_del.setStyleSheet("QPushButton { background: rgba(255,255,255,10); color: rgba(255,255,255,120); border-radius: 6px; padding: 8px; font-size: 11px;} QPushButton:hover { background: rgba(255,100,100,40); color: #ffaaaa; }")
-        btn_del.clicked.connect(self._delete_sounds)
+        btn_del.setFixedHeight(36)
+        btn_del.setStyleSheet(f"QPushButton {{ background: rgba(255,255,255,13); color: {TEXT_LOW}; border-radius: 10px; padding: 0 16px; font-size: 11px; font-family: 'DM Sans'; }} QPushButton:hover {{ background: rgba(255,100,100,25); color: #ffaaaa; }}")
+        btn_del.clicked.connect(self._delete_file)
         
         btn_row.addWidget(btn_add)
         btn_row.addWidget(btn_del)
@@ -176,45 +221,52 @@ class SoundManagerWindow(QWidget):
     def _refresh_list(self):
         self.list_w.clear()
         if os.path.isdir(USER_SOUNDS_DIR):
-            for file in os.listdir(USER_SOUNDS_DIR):
-                if file.lower().endswith((".mp3", ".wav", ".ogg")):
-                    self.list_w.addItem(file)
+            for item in os.listdir(USER_SOUNDS_DIR):
+                if item.endswith(".mp3"):
+                    self.list_w.addItem(item)
 
-    def _add_sounds(self):
-        files, _ = QFileDialog.getOpenFileNames(self, "Select Audio Files", "", "Audio Files (*.mp3 *.wav *.ogg)")
-        if not files:
-            return
+    def _add_file(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Select MP3 File", "", "Audio Files (*.mp3)")
+        if not path: return
+        dest = os.path.join(USER_SOUNDS_DIR, os.path.basename(path))
+        try:
+            shutil.copy2(path, dest)
+            self._refresh_list()
+        except Exception: pass
+
+    def _delete_file(self):
+        selected = self.list_w.selectedItems()
+        if not selected and self.list_w.currentItem():
+            selected = [self.list_w.currentItem()]
             
-        for file_path in files:
-            file_name = os.path.basename(file_path)
-            dest = os.path.join(USER_SOUNDS_DIR, file_name)
-            if not os.path.exists(dest):
-                try:
-                    shutil.copy2(file_path, dest)
-                except Exception as e:
-                    print(f"[Sound Manager] Failed to copy {file_name}: {e}")
-                    
+        if not selected: return
+        for item in selected:
+            target = os.path.join(USER_SOUNDS_DIR, item.text())
+            try:
+                if os.path.isfile(target):
+                    os.remove(target)
+            except Exception: pass
         self._refresh_list()
 
-    def _delete_sounds(self):
-        for item in self.list_w.selectedItems():
-            file_name = item.text()
-            target = os.path.join(USER_SOUNDS_DIR, file_name)
-            try:
-                os.remove(target)
-                self._refresh_list()
-            except Exception as e:
-                print(f"[Sound Manager] Failed to delete {file_name}: {e}")
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+
+    def mouseMoveEvent(self, e):
+        if e.buttons() == Qt.MouseButton.LeftButton and hasattr(self, '_drag_pos') and self._drag_pos:
+            self.move(e.globalPosition().toPoint() - self._drag_pos)
+
+    def mouseReleaseEvent(self, e): self._drag_pos = None
 
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         path = QPainterPath()
-        path.addRoundedRect(QRectF(self.rect()), 16, 16)
+        path.addRoundedRect(QRectF(self.rect()), 20, 20)
         bg = QLinearGradient(0, 0, 0, self.height())
-        bg.setColorAt(0, QColor(16, 13, 26, 252))
-        bg.setColorAt(1, QColor(10, 8, 20, 252))
+        bg.setColorAt(0, QColor(BG_1))
+        bg.setColorAt(1, QColor(BG_0))
         p.fillPath(path, QBrush(bg))
-        p.setPen(QPen(QColor(255, 255, 255, 18), 1))
+        p.setPen(QPen(QColor(255, 255, 255, 20), 1))
         p.drawPath(path)
         p.end()

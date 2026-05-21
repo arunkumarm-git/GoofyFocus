@@ -1,16 +1,25 @@
 # pro/gate.py
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QApplication
 from PyQt6.QtCore import Qt, QTimer, QRectF
-from PyQt6.QtGui import QPainter, QColor, QPainterPath, QLinearGradient, QBrush, QPen, QDesktopServices
+from PyQt6.QtGui import QPainter, QColor, QPainterPath, QLinearGradient, QBrush, QPen, QDesktopServices, QFont
 from PyQt6.QtCore import QUrl
 from auth import get_supabase_client, save_cached_user
 import requests
+
+# ── Design tokens (matching app.py) ──────────────────
+BG_0      = "#161514"
+BG_1      = "#1c1b19"
+ACCENT     = "#849d8a"
+TEXT_HI    = "rgba(255,255,255,235)"
+TEXT_MID   = "rgba(255,255,255,140)"
+TEXT_LOW   = "rgba(255,255,255,76)"
+BORDER     = "rgba(255,255,255,20)"
 
 class UpgradeDialog(QWidget):
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
         self.main_window = main_window
-        self.setFixedSize(360, 480)
+        self.setFixedSize(360, 520)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self._build_ui()
@@ -22,13 +31,16 @@ class UpgradeDialog(QWidget):
 
         # Title
         tb = QHBoxLayout()
-        title = QLabel("unlock screenbreak pro")
-        title.setStyleSheet("color: white; font-size: 14px; font-weight: bold; font-family: 'Segoe UI';")
+        title = QLabel("unlock pro")
+        title.setFont(QFont("DM Mono", 14, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {ACCENT}; background: transparent;")
         tb.addWidget(title)
         tb.addStretch()
         close_btn = QPushButton("×")
-        close_btn.setFixedSize(22, 22)
-        close_btn.setStyleSheet("QPushButton { background: transparent; color: rgba(255,255,255,60); border: none; font-size: 16px; } QPushButton:hover { color: white; }")
+        close_btn.setFixedSize(24, 24)
+        close_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {TEXT_LOW}; border: none; font-size: 20px; }} "
+            f"QPushButton:hover {{ color: {TEXT_HI}; }}")
         close_btn.clicked.connect(self.close)
         tb.addWidget(close_btn)
         root.addLayout(tb)
@@ -36,36 +48,69 @@ class UpgradeDialog(QWidget):
         # Features List
         features = [
             "✦ Focus stats dashboard",
-            "✦ Session history export",
+            "✦ Session history sync",
             "✦ Custom break messages",
             "✦ Unlimited GIF packs",
-            "✦ Custom sounds",
-            "✦ Sessions-per-cycle control",
-            "✦ Supporter badge"
+            "✦ Custom ambient sounds",
+            "✦ Session cycle control",
+            "✦ Early access to features"
         ]
         for f in features:
             lbl = QLabel(f)
-            lbl.setStyleSheet("color: rgba(255,255,255,180); font-size: 12px; font-family: 'Segoe UI'; padding: 2px 0px;")
+            lbl.setFont(QFont("DM Sans", 11))
+            lbl.setStyleSheet(f"color: {TEXT_MID}; background: transparent; padding: 2px 0px;")
             root.addWidget(lbl)
 
         root.addStretch()
 
         # Buy Button
-        self.btn_buy = QPushButton("get pro — $9 / lifetime")
-        self.btn_buy.setStyleSheet("QPushButton { background: rgba(192,132,252,0.25); color: #d8b4fe; border: 1px solid rgba(192,132,252,0.5); border-radius: 8px; padding: 12px; font-size: 12px; font-weight: bold; } QPushButton:hover { background: rgba(192,132,252,0.4); }")
-        # Replace with your actual LemonSqueezy/Gumroad link
+        self.btn_buy = QPushButton("get pro — $9 lifetime")
+        self.btn_buy.setFixedHeight(44)
+        self.btn_buy.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(132,157,138,51);
+                color: rgba(220,190,255,242);
+                border: 1px solid rgba(132,157,138,89);
+                border-radius: 12px;
+                font-size: 13px;
+                font-family: 'DM Sans';
+                font-weight: 600;
+            }}
+            QPushButton:hover {{ background: rgba(132,157,138,76); color: white; }}
+        """)
         self.btn_buy.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://screenbreak.lemonsqueezy.com/checkout/buy/2d24af9e-4d6a-41b9-aa06-c37525f76955")))
         root.addWidget(self.btn_buy)
 
         # License Activation
         key_layout = QHBoxLayout()
         self.key_input = QLineEdit()
-        self.key_input.setPlaceholderText("Already have a key? Enter here...")
-        self.key_input.setStyleSheet("background: rgba(255,255,255,10); border: none; border-radius: 6px; padding: 8px; color: white; font-size: 11px;")
+        self.key_input.setPlaceholderText("Already have a key?")
+        self.key_input.setStyleSheet(f"""
+            QLineEdit {{
+                background: rgba(255,255,255,10);
+                border: 1px solid {BORDER};
+                border-radius: 8px;
+                padding: 8px 12px;
+                color: {TEXT_HI};
+                font-size: 11px;
+                font-family: 'DM Sans';
+            }}
+        """)
         key_layout.addWidget(self.key_input)
 
         self.btn_activate = QPushButton("activate")
-        self.btn_activate.setStyleSheet("QPushButton { background: rgba(255,255,255,15); color: white; border-radius: 6px; padding: 8px 12px; font-size: 11px; } QPushButton:hover { background: rgba(255,255,255,25); }")
+        self.btn_activate.setFixedHeight(34)
+        self.btn_activate.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(255,255,255,15);
+                color: {TEXT_MID};
+                border-radius: 8px;
+                padding: 0 16px;
+                font-size: 11px;
+                font-family: 'DM Sans';
+            }}
+            QPushButton:hover {{ background: rgba(255,255,255,25); color: {TEXT_HI}; }}
+        """)
         self.btn_activate.clicked.connect(self._try_activate)
         key_layout.addWidget(self.btn_activate)
         
@@ -73,7 +118,8 @@ class UpgradeDialog(QWidget):
 
         self.status = QLabel("")
         self.status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status.setStyleSheet("color: rgba(255,255,255,100); font-size: 10px;")
+        self.status.setFont(QFont("DM Mono", 10))
+        self.status.setStyleSheet(f"color: {TEXT_LOW}; background: transparent;")
         root.addWidget(self.status)
 
     def _try_activate(self):
@@ -132,9 +178,10 @@ class UpgradeDialog(QWidget):
         path = QPainterPath()
         path.addRoundedRect(QRectF(self.rect()), 16, 16)
         bg = QLinearGradient(0, 0, 0, self.height())
-        bg.setColorAt(0, QColor(20, 16, 32, 252))
-        bg.setColorAt(1, QColor(12, 10, 24, 252))
+        # Warm earthy background
+        bg.setColorAt(0, QColor(35, 33, 31, 252))
+        bg.setColorAt(1, QColor(22, 21, 20, 252))
         p.fillPath(path, QBrush(bg))
-        p.setPen(QPen(QColor(192, 132, 252, 40), 1))
+        p.setPen(QPen(QColor(132, 157, 138, 40), 1))
         p.drawPath(path)
         p.end()

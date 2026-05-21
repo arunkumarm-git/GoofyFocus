@@ -2,11 +2,20 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit, QApplication
 from PyQt6.QtCore import Qt, QTimer, QRectF
-from PyQt6.QtGui import QPainter, QColor, QPainterPath, QLinearGradient, QBrush, QPen
+from PyQt6.QtGui import QPainter, QColor, QPainterPath, QLinearGradient, QBrush, QPen, QFont
 from auth import get_supabase_client
 
+# ── Design tokens (matching app.py) ──────────────────
+BG_0      = "#161514"
+BG_1      = "#1c1b19"
+ACCENT     = "#849d8a"
+TEXT_HI    = "rgba(255,255,255,235)"
+TEXT_MID   = "rgba(255,255,255,140)"
+TEXT_LOW   = "rgba(255,255,255,76)"
+BORDER     = "rgba(255,255,255,20)"
+
 # ──────────────────────────────────────────────
-# FEEDBACK WINDOW  (Supabase used here only)
+# FEEDBACK WINDOW
 # ──────────────────────────────────────────────
 class FeedbackWindow(QWidget):
     def __init__(self, user_email: str = "", parent=None):
@@ -20,7 +29,6 @@ class FeedbackWindow(QWidget):
         self._build_ui()
 
     def _build_ui(self):
-        from PyQt6.QtWidgets import QTextEdit
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 20, 24, 20)
         root.setSpacing(14)
@@ -28,31 +36,33 @@ class FeedbackWindow(QWidget):
         # Title bar
         tb = QHBoxLayout()
         title = QLabel("feedback")
-        title.setStyleSheet("color: rgba(255,255,255,180); font-size: 13px; font-family: 'Segoe UI';")
+        title.setFont(QFont("DM Mono", 12))
+        title.setStyleSheet(f"color: {TEXT_HI}; background: transparent;")
         tb.addWidget(title)
         tb.addStretch()
         close_btn = QPushButton("×")
-        close_btn.setFixedSize(22, 22)
+        close_btn.setFixedSize(24, 24)
         close_btn.setStyleSheet(
-            "QPushButton { background: transparent; color: rgba(255,255,255,60); border: none; font-size: 16px; } "
-            "QPushButton:hover { color: white; }")
+            f"QPushButton {{ background: transparent; color: {TEXT_LOW}; border: none; font-size: 18px; }} "
+            f"QPushButton:hover {{ color: {TEXT_HI}; }}")
         close_btn.clicked.connect(self.close)
         tb.addWidget(close_btn)
         root.addLayout(tb)
 
         # Star rating
         rating_lbl = QLabel("how's your experience?")
-        rating_lbl.setStyleSheet("color: rgba(255,255,255,100); font-size: 11px; font-family: 'Segoe UI';")
+        rating_lbl.setFont(QFont("DM Sans", 11))
+        rating_lbl.setStyleSheet(f"color: {TEXT_MID}; background: transparent;")
         root.addWidget(rating_lbl)
 
         stars_row = QHBoxLayout()
         self._star_btns = []
         for i in range(1, 6):
             s = QPushButton("☆")
-            s.setFixedSize(36, 36)
+            s.setFixedSize(40, 40)
             s.setStyleSheet(
-                "QPushButton { background: transparent; color: rgba(255,255,255,60); border: none; font-size: 20px; } "
-                "QPushButton:hover { color: #f472b6; }")
+                f"QPushButton {{ background: transparent; color: {TEXT_LOW}; border: none; font-size: 24px; }} "
+                f"QPushButton:hover {{ color: #a1bfa8; }}")
             s.clicked.connect(lambda _, r=i: self._set_rating(r))
             stars_row.addWidget(s)
             self._star_btns.append(s)
@@ -61,45 +71,49 @@ class FeedbackWindow(QWidget):
 
         # Message box
         msg_lbl = QLabel("tell us more (optional)")
-        msg_lbl.setStyleSheet("color: rgba(255,255,255,100); font-size: 11px; font-family: 'Segoe UI';")
+        msg_lbl.setFont(QFont("DM Sans", 11))
+        msg_lbl.setStyleSheet(f"color: {TEXT_MID}; background: transparent;")
         root.addWidget(msg_lbl)
 
         self.msg_box = QTextEdit()
         self.msg_box.setPlaceholderText("what could be better?")
-        self.msg_box.setFixedHeight(100)
-        self.msg_box.setStyleSheet("""
-            QTextEdit {
-                background: rgba(255,255,255,6);
-                border: 1px solid rgba(255,255,255,14);
-                border-radius: 8px;
-                padding: 8px;
-                color: rgba(255,255,255,190);
-                font-size: 11px;
-                font-family: 'Segoe UI';
-            }
+        self.msg_box.setFixedHeight(120)
+        self.msg_box.setStyleSheet(f"""
+            QTextEdit {{
+                background: rgba(255,255,255,8);
+                border: 1px solid {BORDER};
+                border-radius: 10px;
+                padding: 10px;
+                color: {TEXT_HI};
+                font-size: 12px;
+                font-family: 'DM Sans';
+            }}
         """)
         root.addWidget(self.msg_box)
 
         # Submit button
         self.btn_submit = QPushButton("send feedback")
-        self.btn_submit.setStyleSheet("""
-            QPushButton {
-                background: rgba(192,132,252,0.22);
-                color: rgba(216,180,254,220);
-                border: 1px solid rgba(192,132,252,0.30);
-                border-radius: 10px;
+        self.btn_submit.setFixedHeight(40)
+        self.btn_submit.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(132,157,138,38);
+                color: rgba(220,190,255,230);
+                border: 1px solid rgba(132,157,138,64);
+                border-radius: 12px;
                 padding: 8px;
-                font-size: 11px;
-                font-family: 'Segoe UI';
-            }
-            QPushButton:hover { background: rgba(192,132,252,0.35); }
+                font-size: 13px;
+                font-family: 'DM Sans';
+                font-weight: 500;
+            }}
+            QPushButton:hover {{ background: rgba(132,157,138,64); color: white; }}
         """)
         self.btn_submit.clicked.connect(self._submit)
         root.addWidget(self.btn_submit)
 
         self.status_lbl = QLabel("")
         self.status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_lbl.setStyleSheet("color: rgba(255,255,255,80); font-size: 10px;")
+        self.status_lbl.setFont(QFont("DM Mono", 10))
+        self.status_lbl.setStyleSheet(f"color: {TEXT_LOW}; background: transparent;")
         root.addWidget(self.status_lbl)
 
     def _set_rating(self, rating: int):
@@ -107,24 +121,23 @@ class FeedbackWindow(QWidget):
         for i, btn in enumerate(self._star_btns):
             btn.setText("★" if i < rating else "☆")
             btn.setStyleSheet(
-                f"QPushButton {{ background: transparent; border: none; font-size: 20px; "
-                f"color: {'#c084fc' if i < rating else 'rgba(255,255,255,40)'}; }}"
-                f"QPushButton:hover {{ color: #f472b6; }}"
+                f"QPushButton {{ background: transparent; border: none; font-size: 24px; "
+                f"color: {'#849d8a' if i < rating else 'rgba(255,255,255,51)'}; }}"
+                f"QPushButton:hover {{ color: #a1bfa8; }}"
             )
 
     def _submit(self):
         if self._rating == 0:
             self.status_lbl.setText("please select a rating ★")
             return
-            
+
         self.btn_submit.setText("sending...")
         QApplication.processEvents()
-        
+
         try:
-            # ---> NEW: Use your existing client instead of os.getenv <---
             sb = get_supabase_client()
             if not sb:
-                self.status_lbl.setText("couldn't connect to database")
+                self.status_lbl.setText("couldn't connect")
                 self.btn_submit.setText("send feedback")
                 return
 
@@ -133,26 +146,25 @@ class FeedbackWindow(QWidget):
                 "rating":  self._rating,
                 "message": self.msg_box.toPlainText().strip(),
             }).execute()
-            
+
             self.status_lbl.setText("✓ thanks for your feedback!")
             self.btn_submit.setText("sent!")
             QTimer.singleShot(2000, self.close)
-            
+
         except Exception as e:
-            self.status_lbl.setText("couldn't send — check your connection")
+            self.status_lbl.setText("error sending")
             self.btn_submit.setText("send feedback")
-            print(f"Feedback error ({type(e).__name__}): {e}")
-            import traceback; traceback.print_exc()
+            print(f"Feedback error: {e}")
 
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         path = QPainterPath()
-        path.addRoundedRect(QRectF(self.rect()), 16, 16)
+        path.addRoundedRect(QRectF(self.rect()), 20, 20)
         bg = QLinearGradient(0, 0, 0, self.height())
-        bg.setColorAt(0, QColor(13, 11, 22, 252))
-        bg.setColorAt(1, QColor(9, 8, 18, 252))
+        bg.setColorAt(0, QColor(BG_1))
+        bg.setColorAt(1, QColor(BG_0))
         p.fillPath(path, QBrush(bg))
-        p.setPen(QPen(QColor(255, 255, 255, 18), 1))
+        p.setPen(QPen(QColor(255, 255, 255, 20), 1))
         p.drawPath(path)
         p.end()

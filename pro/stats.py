@@ -1,19 +1,33 @@
 # pro/stats.py
 import datetime
 import csv
+import os
+import json
 from collections import defaultdict
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog, QApplication
-from PyQt6.QtCore import Qt, QRectF
-from PyQt6.QtGui import QPainter, QColor, QPainterPath, QLinearGradient, QBrush, QPen
+from PyQt6.QtCore import Qt, QRectF, QTimer
+from PyQt6.QtGui import QPainter, QColor, QPainterPath, QLinearGradient, QBrush, QPen, QFont
 from auth import get_supabase_client
+from .dashboard import generate_dashboard
 
-# StatsWindow: shows today's focus time, current streak, etc.  Data is loaded from Supabase and requires user to be logged in.  If not pro, shows a lock and hides the data.    
+# ── Design tokens (matching app.py) ──────────────────
+BG_0      = "#161514"
+BG_1      = "#1c1b19"
+ACCENT     = "#849d8a"
+ACCENT_DIM = "rgba(132,157,138,38)"
+ACCENT_BDR = "rgba(132,157,138,64)"
+TEXT_HI    = "rgba(255,255,255,235)"
+TEXT_MID   = "rgba(255,255,255,140)"
+TEXT_LOW   = "rgba(255,255,255,76)"
+BORDER     = "rgba(255,255,255,20)"
+
 class StatsWindow(QWidget):
-    def __init__(self, user_info: dict, is_pro: bool, parent=None):
+    def __init__(self, user_info: dict, is_pro: bool, active_elapsed_secs: int = 0, parent=None):
         super().__init__(parent)
         self._user_info = user_info
         self._is_pro    = is_pro
-        self.setFixedSize(320, 360)
+        self._active_elapsed_secs = active_elapsed_secs
+        self.setFixedSize(320, 420)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self._build_ui()
@@ -28,14 +42,15 @@ class StatsWindow(QWidget):
         # Title bar
         tb = QHBoxLayout()
         title = QLabel("focus stats")
-        title.setStyleSheet("color: rgba(255,255,255,180); font-size: 13px; font-family: 'Segoe UI';")
+        title.setFont(QFont("DM Mono", 12))
+        title.setStyleSheet(f"color: {TEXT_HI}; background: transparent;")
         tb.addWidget(title)
         tb.addStretch()
         close_btn = QPushButton("×")
-        close_btn.setFixedSize(22, 22)
+        close_btn.setFixedSize(24, 24)
         close_btn.setStyleSheet(
-            "QPushButton { background: transparent; color: rgba(255,255,255,60); border: none; font-size: 16px; } "
-            "QPushButton:hover { color: white; }")
+            f"QPushButton {{ background: transparent; color: {TEXT_LOW}; border: none; font-size: 18px; }} "
+            f"QPushButton:hover {{ color: {TEXT_HI}; }}")
         close_btn.clicked.connect(self.close)
         tb.addWidget(close_btn)
         root.addLayout(tb)
@@ -43,86 +58,73 @@ class StatsWindow(QWidget):
         # Stats Grid
         self.lbl_today  = self._add_stat_row(root, "Today", "-- min")
         self.lbl_week   = self._add_stat_row(root, "This week", "-- sessions")
-        self.lbl_streak = self._add_stat_row(root, "Current streak", "-- days")
+        self.lbl_streak = self._add_stat_row(root, "Streak", "-- days")
         self.lbl_total  = self._add_stat_row(root, "Total focus", "-- hrs")
 
         root.addStretch()
 
+        # Interactive Dashboard Button
+        if self._is_pro:
+            self.btn_dashboard = QPushButton("◈ view interactive dashboard")
+            self.btn_dashboard.setFixedHeight(36)
+            self.btn_dashboard.setStyleSheet(f"""
+                QPushButton {{ 
+                    background: {ACCENT_DIM if 'ACCENT_DIM' in globals() else 'rgba(132,157,138,38)'}; 
+                    color: white; 
+                    border: 1px solid {ACCENT};
+                    border-radius: 10px; 
+                    padding: 6px; 
+                    font-size: 11px;
+                    font-family: 'DM Sans';
+                    font-weight: 500;
+                }}
+                QPushButton:hover {{ background: rgba(132,157,138,64); }}
+            """)
+            self.btn_dashboard.clicked.connect(self._show_interactive_dashboard)
+            root.addWidget(self.btn_dashboard)
+
         # Pro Lock / Export Button
         if not self._is_pro:
-            lock = QLabel("🔒 unlock stats with pro")
+            lock = QLabel("🔒 unlock with pro")
             lock.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lock.setStyleSheet(
-                "color: rgba(192,132,252,200); font-size: 11px; font-family: 'Segoe UI'; "
-                "background: rgba(192,132,252,0.1); padding: 10px; border-radius: 8px;")
+            lock.setFont(QFont("DM Sans", 11))
+            lock.setStyleSheet(f"""
+                color: {ACCENT}; background: rgba(132,157,138,25); 
+                padding: 12px; border-radius: 10px; border: 1px solid rgba(132,157,138,51);
+            """)
             root.addWidget(lock)
         else:
             self.btn_export = QPushButton("↓ export csv")
-            self.btn_export.setStyleSheet("""
-                QPushButton { background: rgba(255,255,255,8); color: rgba(255,255,255,160); border-radius: 8px; padding: 6px; font-size: 10px; }
-                QPushButton:hover { background: rgba(255,255,255,16); color: white; }
+            self.btn_export.setFixedHeight(36)
+            self.btn_export.setStyleSheet(f"""
+                QPushButton {{ 
+                    background: rgba(255,255,255,13); 
+                    color: {TEXT_MID}; 
+                    border: 1px solid {BORDER};
+                    border-radius: 10px; 
+                    padding: 6px; 
+                    font-size: 11px;
+                    font-family: 'DM Sans';
+                }}
+                QPushButton:hover {{ background: rgba(255,255,255,25); color: {TEXT_HI}; }}
             """)
-            self.btn_export.clicked.connect(self._export_csv)  # ── NEW: Wire the click
+            self.btn_export.clicked.connect(self._export_csv)
             root.addWidget(self.btn_export)
 
-            # ── NEW: Status label for export feedback ──
             self.status_lbl = QLabel("")
             self.status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.status_lbl.setStyleSheet("color: rgba(255,255,255,80); font-size: 10px;")
+            self.status_lbl.setFont(QFont("DM Mono", 10))
+            self.status_lbl.setStyleSheet(f"color: {TEXT_LOW}; background: transparent;")
             root.addWidget(self.status_lbl)
 
-    def _export_csv(self):
-        import csv
-        
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export Sessions", 
-            f"screenbreak_{datetime.date.today()}.csv",
-            "CSV files (*.csv)"
-        )
-        if not path:
-            return
-            
-        self.btn_export.setText("exporting...")
-        QApplication.processEvents()
-        
-        try:
-            sb = get_supabase_client()
-            
-            sub  = self._user_info.get("id")
-            
-            # Fetch all sessions for this user, newest first
-            rows = (
-                sb.table("sessions")
-                .select("completed_at, duration_secs, phase")
-                .eq("google_sub", sub)
-                .order("completed_at", desc=True)
-                .execute()
-            ).data
-            
-            with open(path, "w", newline="") as f:
-                w = csv.DictWriter(f, fieldnames=["date", "duration_min", "phase"])
-                w.writeheader()
-                for r in rows:
-                    w.writerow({
-                        "date":         r["completed_at"][:19].replace("T", " "),
-                        "duration_min": round(r["duration_secs"] / 60, 1),
-                        "phase":        r["phase"],
-                    })
-                    
-            self.btn_export.setText("↓ export csv")
-            self.status_lbl.setText(f"✓ exported {len(rows)} sessions")
-            
-        except Exception as e:
-            self.btn_export.setText("↓ export csv")
-            self.status_lbl.setText("export failed")
-            print(f"[export] {e}")        
-
-    def _add_stat_row(self, layout, label_text, val_text):
+    def _add_stat_row(self, layout, label, value):
         row = QHBoxLayout()
-        lbl = QLabel(label_text)
-        lbl.setStyleSheet("color: rgba(255,255,255,120); font-size: 11px; font-family: 'Segoe UI';")
-        val = QLabel(val_text)
-        val.setStyleSheet("color: rgba(255,255,255,220); font-size: 12px; font-family: 'Segoe UI'; font-weight: 500;")
+        lbl = QLabel(label)
+        lbl.setFont(QFont("DM Sans", 11))
+        lbl.setStyleSheet(f"color: {TEXT_MID}; background: transparent;")
+        val = QLabel(value)
+        val.setFont(QFont("DM Mono", 11))
+        val.setStyleSheet(f"color: {ACCENT}; background: transparent; font-weight: bold;")
         row.addWidget(lbl)
         row.addStretch()
         row.addWidget(val)
@@ -130,60 +132,176 @@ class StatsWindow(QWidget):
         return val
 
     def _load_stats(self):
-        self.lbl_today.setText("loading...")
-        QApplication.processEvents()
+        # Reset to 0 instead of --
+        self.lbl_today.setText("0 min")
+        self.lbl_week.setText("0 sess")
+        self.lbl_total.setText("0 hrs")
+        self.lbl_streak.setText("0 days")
+        if self._is_pro:
+            self.status_lbl.setText("loading local stats...")
+
         try:
-            sb = get_supabase_client()
-        
-            sub  = self._user_info.get("id")
-            rows = (
-                sb.table("sessions")
-                .select("completed_at, duration_secs")
-                .eq("google_sub", sub)
-                .eq("phase", "Work")
-                .gte("completed_at", "now() - interval '30 days'")
-                .execute()
-            ).data
-            self._render_stats(rows)
+            # 1. Load from Local JSON (Primary)
+            from assets import USER_DATA_DIR
+            local_db = os.path.join(USER_DATA_DIR, "sessions.json")
+            data = []
+            if os.path.exists(local_db):
+                with open(local_db, "r") as f:
+                    data = json.load(f)
+                print(f"[stats] loaded {len(data)} rows from local sessions.json")
+            else:
+                # 2. Fallback to Supabase
+                print(f"[stats] local db not found at {local_db}, trying cloud...")
+                sb = get_supabase_client()
+                if sb:
+                    sub = self._user_info.get("id")
+                    if sub:
+                        res = sb.table("sessions").select("*").eq("google_sub", sub).execute()
+                        data = res.data
+                        print(f"[stats] fetched {len(data) if data else 0} rows from cloud")
+
+            if not data and self._active_elapsed_secs == 0: 
+                if self._is_pro: self.status_lbl.setText("no sessions recorded yet")
+                return
+
+            # Use local time for stats comparison
+            now_local = datetime.datetime.now()
+            today_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+            week_start  = today_start - datetime.timedelta(days=7)
+            
+            today_secs = self._active_elapsed_secs
+            week_count = 1 if self._active_elapsed_secs > 0 else 0
+            total_secs = self._active_elapsed_secs
+            
+            parsed_dates = set()
+            if self._active_elapsed_secs > 0:
+                parsed_dates.add(now_local.date())
+
+            for r in data:
+                try:
+                    raw_ts = r.get("completed_at")
+                    if not raw_ts: continue
+                    
+                    # Convert UTC from DB to local time
+                    clean_ts = raw_ts.replace("Z", "+00:00")
+                    utc_ts = datetime.datetime.fromisoformat(clean_ts)
+                    local_ts = utc_ts.astimezone(None).replace(tzinfo=None) # naive local
+                    
+                    parsed_dates.add(local_ts.date())
+                    
+                    dur = r.get("duration_secs", 0)
+                    total_secs += dur
+                    if local_ts >= today_start:
+                        today_secs += dur
+                    if local_ts >= week_start:
+                        week_count += 1
+                except Exception as e:
+                    print(f"[stats] row error: {e}")
+                    continue
+
+            self.lbl_today.setText(f"{today_secs // 60} min")
+            self.lbl_week.setText(f"{week_count} sess")
+            self.lbl_total.setText(f"{total_secs // 3600} hrs")
+            
+            # Streak logic
+            days = sorted(list(parsed_dates), reverse=True)
+            streak = 0
+            today = datetime.date.today()
+            yesterday = today - datetime.timedelta(days=1)
+            
+            if days:
+                start_day = None
+                if days[0] == today: start_day = today
+                elif days[0] == yesterday: start_day = yesterday
+                
+                if start_day:
+                    streak = 0
+                    curr = start_day
+                    for d in days:
+                        if d == curr:
+                            streak += 1
+                            curr -= datetime.timedelta(days=1)
+                        elif d > curr: continue # multiple sessions same day
+                        else: break
+
+            self.lbl_streak.setText(f"{streak} days")
+            if self._is_pro: self.status_lbl.setText(f"loaded {len(data)} local sessions")
+            
         except Exception as e:
             print(f"[stats] load failed: {e}")
-            self.lbl_today.setText("error")
+            if self._is_pro: self.status_lbl.setText(f"load error: {str(e)[:30]}")
 
-    def _render_stats(self, rows):
-        from collections import defaultdict
-        import datetime
-        today = datetime.date.today()
-        by_day = defaultdict(int)
-        
-        for r in rows:
-            # Parse 'YYYY-MM-DD' from '2023-10-27T14:32:00+00:00'
-            day = r["completed_at"][:10]
-            by_day[day] += r["duration_secs"]
-            
-        today_mins  = by_day.get(str(today), 0) // 60
-        week_count  = sum(1 for r in rows if r["completed_at"][:10] >= str(today - datetime.timedelta(days=6)))
-        total_hours = sum(r["duration_secs"] for r in rows) / 3600
-        
-        streak = 0
-        d = today
-        while str(d) in by_day:
-            streak += 1
-            d -= datetime.timedelta(days=1)
-            
-        self.lbl_today.setText(f"{today_mins} min")
-        self.lbl_week.setText(f"{week_count} sessions")
-        self.lbl_streak.setText(f"{streak} days")
-        self.lbl_total.setText(f"{total_hours:.1f} hrs")
+    def _export_csv(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Export Sessions", f"screenbreak_{datetime.date.today()}.csv", "CSV files (*.csv)")
+        if not path: return
+        self.btn_export.setText("exporting...")
+        QApplication.processEvents()
+        try:
+            # 1. Load from Local JSON (Primary)
+            from assets import USER_DATA_DIR
+            local_db = os.path.join(USER_DATA_DIR, "sessions.json")
+            rows = []
+            if os.path.exists(local_db):
+                with open(local_db, "r") as f:
+                    rows = json.load(f)
+            else:
+                # 2. Fallback to Supabase
+                sb = get_supabase_client()
+                if sb:
+                    sub = self._user_info.get("id")
+                    if sub:
+                        res = sb.table("sessions").select("completed_at, duration_secs, phase").eq("google_sub", sub).order("completed_at", desc=True).execute()
+                        rows = res.data
+
+            if rows:
+                with open(path, 'w', newline='') as f:
+                    # Filter keys to match CSV requirements
+                    fieldnames = ["completed_at", "duration_secs", "phase"]
+                    writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
+                    writer.writeheader()
+                    # Sort rows by completed_at descending (newest first)
+                    rows.sort(key=lambda x: x.get("completed_at", ""), reverse=True)
+                    writer.writerows(rows)
+                self.status_lbl.setText("✓ exported successfully")
+            else:
+                self.status_lbl.setText("no data to export")
+            self.btn_export.setText("↓ export csv")
+            QTimer.singleShot(3000, lambda: self.status_lbl.setText(""))
+        except Exception as e:
+            self.status_lbl.setText("export failed")
+            self.btn_export.setText("↓ export csv")
+            print(f"[stats] export failed: {e}")
+
+    def _show_interactive_dashboard(self):
+        self.btn_dashboard.setText("generating...")
+        QApplication.processEvents()
+        success = generate_dashboard(self._user_info)
+        if success:
+            self.status_lbl.setText("✓ dashboard opened in browser")
+        else:
+            self.status_lbl.setText("no data for dashboard")
+        self.btn_dashboard.setText("◈ view interactive dashboard")
+        QTimer.singleShot(3000, lambda: self.status_lbl.setText(""))
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+
+    def mouseMoveEvent(self, e):
+        if e.buttons() == Qt.MouseButton.LeftButton and hasattr(self, '_drag_pos') and self._drag_pos:
+            self.move(e.globalPosition().toPoint() - self._drag_pos)
+
+    def mouseReleaseEvent(self, e): self._drag_pos = None
 
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         path = QPainterPath()
-        path.addRoundedRect(QRectF(self.rect()), 16, 16)
+        path.addRoundedRect(QRectF(self.rect()), 20, 20)
         bg = QLinearGradient(0, 0, 0, self.height())
-        bg.setColorAt(0, QColor(16, 13, 26, 252))
-        bg.setColorAt(1, QColor(10, 8, 20, 252))
+        bg.setColorAt(0, QColor(BG_1))
+        bg.setColorAt(1, QColor(BG_0))
         p.fillPath(path, QBrush(bg))
-        p.setPen(QPen(QColor(255, 255, 255, 18), 1))
+        p.setPen(QPen(QColor(255, 255, 255, 20), 1))
         p.drawPath(path)
         p.end()
