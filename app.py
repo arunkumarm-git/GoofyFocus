@@ -11,9 +11,9 @@ if platform.system() == "Windows":
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QSpinBox, QSystemTrayIcon, QMenu, QSizePolicy,
-    QComboBox, QFrame
+    QComboBox, QFrame, QGraphicsDropShadowEffect
 )
-from PyQt6.QtCore import Qt, QTimer, QRectF, QSettings
+from PyQt6.QtCore import Qt, QTimer, QRectF, QSettings, QSize
 from PyQt6.QtGui import (
     QFont, QPainter, QColor, QPen, QBrush, QLinearGradient,
     QPainterPath, QIcon, QAction, QPixmap
@@ -34,26 +34,26 @@ from pro.media import GifPackManager, SoundManagerWindow
 
 
 # ── Design tokens ──────────────────────────────────────────────────────────────
-BG_0      = "#161514"
-BG_1      = "#1c1b19"
-BG_2      = "#23211f"
-BG_3      = "#2a2826"
-SURFACE   = "rgba(255,255,255,10)"
-SURFACE_H = "rgba(255,255,255,18)"
-BORDER    = "rgba(255,255,255,20)"
-BORDER_H  = "rgba(255,255,255,36)"
+BG_0      = "#181623"
+BG_1      = "#221f32"
+BG_2      = "#242137"
+BG_3      = "#2c2842"
+SURFACE   = "rgba(36, 33, 55, 178)"
+SURFACE_H = "rgba(44, 40, 66, 200)"
+BORDER    = "rgba(157, 78, 221, 40)"
+BORDER_H  = "rgba(157, 78, 221, 100)"
 
-ACCENT     = "#849d8a"
-ACCENT_2   = "#a1bfa8"
-ACCENT_DIM = "rgba(132,157,138,38)"
-ACCENT_BDR = "rgba(132,157,138,64)"
+ACCENT     = "#9d4edd"
+ACCENT_2   = "#ff79c6"
+ACCENT_DIM = "rgba(157, 78, 221, 50)"
+ACCENT_BDR = "rgba(157, 78, 221, 120)"
 
 GREEN      = "#4ade9a"
 BLUE       = "#60b8ff"
 
-TEXT_HI    = "rgba(255,255,255,235)"
-TEXT_MID   = "rgba(255,255,255,140)"
-TEXT_LOW   = "rgba(255,255,255,76)"
+TEXT_HI    = "rgba(255,255,255,255)"
+TEXT_MID   = "rgba(255,255,255,190)"
+TEXT_LOW   = "rgba(255,255,255,120)"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def _lbl(text, size=11, color=TEXT_MID, bold=False, mono=False, low_contrast=False):
@@ -110,12 +110,11 @@ def _ctrl_btn(text, primary=False):
     b.setFixedHeight(28)
     if primary:
         b.setStyleSheet(
-            f"QPushButton {{ background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 rgba(132,157,138,76), stop:1 rgba(161,191,168,46)); "
-            f"color: white; border: 1px solid {ACCENT_BDR}; border-radius: 8px; "
-            f"padding: 0 12px; font-size: 11px; font-family: 'DM Sans'; font-weight: 500; }} "
-            f"QPushButton:hover {{ background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 rgba(132,157,138,102), stop:1 rgba(161,191,168,64)); "
-            f"border-color: rgba(132,157,138,128); }} "
-            f"QPushButton:pressed {{ background: rgba(132,157,138,51); }} "
+            f"QPushButton {{ background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 {{ACCENT}}, stop:1 {{ACCENT_2}}); "
+            f"color: white; border: none; border-radius: 8px; "
+            f"padding: 0 12px; font-size: 11px; font-family: 'DM Sans'; font-weight: 600; }} "
+            f"QPushButton:hover {{ background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #b875f8, stop:1 #ef68aa); }} "
+            f"QPushButton:pressed {{ background: rgba(168,85,247,200); }} "
             f"QPushButton:disabled {{ color: {TEXT_LOW}; }}"
         )
     else:
@@ -192,14 +191,19 @@ class SettingsCard(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(30)
+        shadow.setColor(QColor(0, 0, 0, 150))
+        shadow.setOffset(0, 10)
+        self.setGraphicsEffect(shadow)
 
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         path = QPainterPath()
-        path.addRoundedRect(QRectF(self.rect()), 18, 18)
+        path.addRoundedRect(QRectF(self.rect()), 24, 24)
         p.fillPath(path, QBrush(QColor(BG_2)))
-        p.setPen(QPen(QColor(255, 255, 255, 12), 1))
+        p.setPen(QPen(QColor(157, 78, 221, 60), 1.5))
         p.drawPath(path)
         p.end()
 
@@ -232,21 +236,21 @@ class SessionDots(QWidget):
             cx = x0 + i * (r * 2 + gap) + r
             if i < self._completed:
                 # Soft glow halo
-                p.setBrush(QBrush(QColor(132, 157, 138, 50)))
+                p.setBrush(QBrush(QColor(168, 85, 247, 80)))
                 p.setPen(Qt.PenStyle.NoPen)
-                p.drawEllipse(QRectF(cx - r - 4, cy - r - 4, (r + 4) * 2, (r + 4) * 2))
+                p.drawEllipse(QRectF(cx - r - 6, cy - r - 6, (r + 6) * 2, (r + 6) * 2))
                 # Filled dot
                 p.setBrush(QBrush(QColor(ACCENT)))
                 p.drawEllipse(QRectF(cx - r, cy - r, r * 2, r * 2))
             elif i == self._completed:
-                # Current dot - outline accent
+                # Current dot - outline neon pink
                 p.setBrush(Qt.BrushStyle.NoBrush)
-                p.setPen(QPen(QColor(ACCENT), 1.5))
+                p.setPen(QPen(QColor(ACCENT_2), 1.5))
                 p.drawEllipse(QRectF(cx - r + 0.5, cy - r + 0.5, r * 2 - 1, r * 2 - 1))
             else:
                 # Empty dot - outline dim
                 p.setBrush(Qt.BrushStyle.NoBrush)
-                p.setPen(QPen(QColor(255, 255, 255, 60), 1.5))
+                p.setPen(QPen(QColor(255, 255, 255, 40), 1.5))
                 p.drawEllipse(QRectF(cx - r + 0.5, cy - r + 0.5, r * 2 - 1, r * 2 - 1))
         p.end()
 
@@ -375,8 +379,16 @@ class MainWindow(QWidget):
         lay.addWidget(self.streak_lbl)
 
         # Actions
-        self.btn_stats       = _icon_btn("◈", "Focus stats")
-        self.btn_global_mute = _icon_btn("🔊", "Toggle sound")
+        self.btn_stats       = _icon_btn("")
+        self.btn_stats.setIcon(QIcon(os.path.join(ASSETS_DIR, "icons", "activity.svg")))
+        self.btn_stats.setIconSize(QSize(16, 16))
+        self.btn_stats.setToolTip("Focus stats")
+
+        self.btn_global_mute = _icon_btn("")
+        self.btn_global_mute.setIcon(QIcon(os.path.join(ASSETS_DIR, "icons", "volume-2.svg")))
+        self.btn_global_mute.setIconSize(QSize(16, 16))
+        self.btn_global_mute.setToolTip("Toggle sound")
+        
         self.btn_stats.clicked.connect(self._show_stats)
         self.btn_global_mute.clicked.connect(self._toggle_global_mute)
         lay.addWidget(self.btn_stats)
@@ -444,10 +456,21 @@ class MainWindow(QWidget):
         lay.setContentsMargins(2, 0, 2, 0)
         lay.setSpacing(10)
 
-        self.btn_start = _ctrl_btn("▶  start", primary=True)
-        self.btn_pause = _ctrl_btn("⏸︎  pause", primary=True)
-        self.btn_skip  = _ctrl_btn("skip")
-        self.btn_reset = _ctrl_btn("↺")
+        self.btn_start = _ctrl_btn(" start", primary=True)
+        self.btn_start.setIcon(QIcon(os.path.join(ASSETS_DIR, "icons", "play.svg")))
+        self.btn_start.setIconSize(QSize(16, 16))
+        
+        self.btn_pause = _ctrl_btn(" pause", primary=True)
+        self.btn_pause.setIcon(QIcon(os.path.join(ASSETS_DIR, "icons", "pause.svg")))
+        self.btn_pause.setIconSize(QSize(16, 16))
+        
+        self.btn_skip  = _ctrl_btn("")
+        self.btn_skip.setIcon(QIcon(os.path.join(ASSETS_DIR, "icons", "skip-forward.svg")))
+        self.btn_skip.setIconSize(QSize(18, 18))
+        
+        self.btn_reset = _ctrl_btn("")
+        self.btn_reset.setIcon(QIcon(os.path.join(ASSETS_DIR, "icons", "rotate-ccw.svg")))
+        self.btn_reset.setIconSize(QSize(16, 16))
 
         # Primary CTA fills available space; secondary buttons are compact
         self.btn_start.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -493,12 +516,12 @@ class MainWindow(QWidget):
         self._flow_combo.addItems(["Auto (4 short → long)", "Always short", "Always long"])
         self._flow_combo.setFixedWidth(160)
         self._flow_combo.setStyleSheet(
-            f"QComboBox{{background:rgba(255,255,255,12);border:1px solid {ACCENT_BDR};"
-            f"border-radius:6px;padding:4px 10px;color:rgba(220,200,255,198);font-size:11px;"
+            f"QComboBox{{background:{SURFACE};border:1px solid {BORDER};"
+            f"border-radius:6px;padding:4px 10px;color:{TEXT_HI};font-size:11px;"
             "font-family:'DM Sans';font-weight:400;}"
             "QComboBox::drop-down{border:none;width:14px;}"
-            "QComboBox QAbstractItemView{background:#1a1b26;border:1px solid rgba(132,157,138,51);"
-            "color:rgba(220,200,255,198);selection-background-color:rgba(132,157,138,25);font-size:11px;}"
+            f"QComboBox QAbstractItemView{{background:{BG_2};border:1px solid {BORDER};"
+            f"color:{TEXT_HI};selection-background-color:{SURFACE_H};font-size:11px;}}"
         )
         lay.addWidget(_setting_row("Break flow", "session cycle pattern", self._flow_combo))
         lay.addWidget(_divider())
@@ -516,9 +539,9 @@ class MainWindow(QWidget):
         self._spc_spin.setEnabled(False)
         self._spc_spin.setFixedWidth(44)
         self._spc_spin.setStyleSheet(
-            f"QSpinBox{{background:rgba(255,255,255,12);border:1px solid {ACCENT_BDR};"
-            "border-radius:6px;padding:3px 6px;color:rgba(220,200,255,198);font-size:11px;font-weight:400;}"
-            f"QSpinBox:focus{{border-color:rgba(185,142,245,150);}}"
+            f"QSpinBox{{background:{SURFACE};border:1px solid {BORDER};"
+            f"border-radius:6px;padding:3px 6px;color:{TEXT_HI};font-size:11px;font-weight:400;}}"
+            f"QSpinBox:focus{{border-color:{ACCENT};}}"
             "QSpinBox::up-button,QSpinBox::down-button{width:0px;border:none;}"
         )
         self._spc_lock = QLabel("🔒")
@@ -552,10 +575,10 @@ class MainWindow(QWidget):
         self.btn_apply = QPushButton("save settings")
         self.btn_apply.setFixedHeight(38)
         self.btn_apply.setStyleSheet(
-            f"QPushButton{{background:{ACCENT_DIM};color:rgba(220,195,255,219);"
-            f"border:1px solid {ACCENT_BDR};border-radius:10px;"
-            "font-size:11px;font-family:'DM Sans';font-weight:500;}}"
-            "QPushButton:hover{background:rgba(185,142,245,56);border-color:rgba(185,142,245,102);color:rgba(235,220,255,255);}"
+            f"QPushButton{{background:qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {{ACCENT}}, stop:1 {{ACCENT_2}});"
+            f"color:white; border:none; border-radius:10px;"
+            "font-size:11px;font-family:'DM Sans';font-weight:600;}}"
+            "QPushButton:hover{background:qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #b875f8, stop:1 #ef68aa);}"
         )
         save_row = QHBoxLayout()
         save_row.setContentsMargins(16, 0, 16, 14)

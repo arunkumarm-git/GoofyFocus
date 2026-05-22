@@ -9,17 +9,17 @@ from controller import TimerController
 # PHASE COLOURS
 # ──────────────────────────────────────────────
 PHASE_COLORS = {
-    "Work":        ("#00f0ff", "#ff00ff"),
-    "Short Break": ("#4ade9a", "#22c55e"),
-    "Long Break":  ("#60b8ff", "#3b82f6"),
+    "Work":        ("#9d4edd", "#ff79c6"),
+    "Short Break": ("#3b82f6", "#06b6d4"),
+    "Long Break":  ("#10b981", "#3b82f6"),
 }
 
 # ── Design tokens (matching app.py) ──────────────────
-ACCENT     = "#849d8a"
-TEXT_HI    = "rgba(255,255,255,235)"
-TEXT_MID   = "rgba(255,255,255,140)"
-TEXT_LOW   = "rgba(255,255,255,76)"
-ACCENT_BDR = "rgba(132,157,138,64)"
+ACCENT     = "#9d4edd"
+TEXT_HI    = "rgba(255,255,255,255)"
+TEXT_MID   = "rgba(255,255,255,190)"
+TEXT_LOW   = "rgba(255,255,255,120)"
+ACCENT_BDR = "rgba(157, 78, 221, 120)"
 
 # ──────────────────────────────────────────────
 # CIRCULAR TIMER WIDGET
@@ -68,7 +68,7 @@ class CircularTimer(QWidget):
         col1, col2 = QColor(c1), QColor(c2)
 
         # 1. Track - very faint
-        track_pen = QPen(QColor(255, 255, 255, 12), size * 0.035)
+        track_pen = QPen(QColor(30, 25, 45, 200), size * 0.05)
         p.setPen(track_pen)
         p.drawEllipse(rect)
 
@@ -77,13 +77,22 @@ class CircularTimer(QWidget):
             span_deg = self._progress * 360
             span_val = -int(span_deg * 16)
 
-            # Soft glow
+            # Outer glow
             glow_pen = QPen(
-                QColor(col1.red(), col1.green(), col1.blue(), 20),
-                size * 0.075
+                QColor(col1.red(), col1.green(), col1.blue(), 60),
+                size * 0.09
             )
             glow_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             p.setPen(glow_pen)
+            p.drawArc(rect, 90 * 16, span_val)
+            
+            # Inner pipe effect
+            pipe_glow = QPen(
+                QColor(col1.red(), col1.green(), col1.blue(), 180),
+                size * 0.06
+            )
+            pipe_glow.setCapStyle(Qt.PenCapStyle.RoundCap)
+            p.setPen(pipe_glow)
             p.drawArc(rect, 90 * 16, span_val)
 
             # Gradient Arc
@@ -104,6 +113,8 @@ class CircularTimer(QWidget):
             dot_y     = cy - r_mid * math.sin(angle_rad)
             dot_r     = size * 0.024
             p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QBrush(QColor(col2.red(), col2.green(), col2.blue(), 100)))
+            p.drawEllipse(QRectF(dot_x - dot_r * 1.5, dot_y - dot_r * 1.5, dot_r * 3, dot_r * 3))
             p.setBrush(QBrush(col2))
             p.drawEllipse(QRectF(dot_x - dot_r, dot_y - dot_r, dot_r * 2, dot_r * 2))
 
@@ -137,17 +148,17 @@ class DurationSpin(QWidget):
 
         spin_style = f"""
             QSpinBox {{
-                background: rgba(255,255,255,18);
-                border: none;
-                border-radius: 5px;
-                padding: 1px 4px;
-                color: rgba(255,255,255,230);
-                font-size: 11px;
+                background: rgba(36, 33, 55, 178);
+                border: 1px solid rgba(157, 78, 221, 40);
+                border-radius: 6px;
+                padding: 2px 6px;
+                color: rgba(255,255,255,240);
+                font-size: 12px;
                 font-family: 'DM Mono';
                 min-width: 32px;
                 min-height: 20px;
             }}
-            QSpinBox:focus {{ background: rgba(255,255,255,24); }}
+            QSpinBox:focus {{ border-color: #9d4edd; }}
             QSpinBox::up-button, QSpinBox::down-button {{ width: 0px; border: none; }}
         """
         unit_style = (

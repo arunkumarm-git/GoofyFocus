@@ -4,8 +4,9 @@ import random
 import json
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 from PyQt6.QtCore import Qt, QTimer, QSize, QUrl, QSettings
-from PyQt6.QtGui import QFont, QMovie, QPainter, QColor, QBrush, QLinearGradient, QPainterPath
+from PyQt6.QtGui import QFont, QMovie, QPainter, QColor, QBrush, QLinearGradient, QPainterPath, QIcon
 from controller import TimerController
+from assets import ASSETS_DIR
 
 try:
     from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -14,12 +15,12 @@ except ImportError:
     HAS_AUDIO = False
 
 # ── Design tokens (matching app.py) ──────────────────
-BG_0      = "#161514"
-BG_1      = "#1c1b19"
-ACCENT     = "#849d8a"
-TEXT_HI    = "rgba(255,255,255,235)"
-TEXT_MID   = "rgba(255,255,255,140)"
-TEXT_LOW   = "rgba(255,255,255,76)"
+BG_0      = "#181623"
+BG_1      = "#221f32"
+ACCENT     = "#9d4edd"
+TEXT_HI    = "rgba(255,255,255,255)"
+TEXT_MID   = "rgba(255,255,255,190)"
+TEXT_LOW   = "rgba(255,255,255,120)"
 
 # ──────────────────────────────────────────────
 # BREAK OVERLAY
@@ -159,18 +160,21 @@ class BreakOverlayWindow(QWidget):
         bottom.setAlignment(Qt.AlignmentFlag.AlignCenter)
         bottom.setSpacing(32)
 
-        self.btn_mute = QPushButton("🔊 mute" if not self.muted else "🔇 unmute")
+        self.btn_mute = QPushButton(" mute" if not self.muted else " unmute")
+        icon_name = "volume-x.svg" if self.muted else "volume-2.svg"
+        self.btn_mute.setIcon(QIcon(os.path.join(ASSETS_DIR, "icons", icon_name)))
+        self.btn_mute.setIconSize(QSize(16, 16))
         self.btn_mute.setStyleSheet(f"""
             QPushButton {{
-                background: rgba(255,255,255,13);
+                background: rgba(36, 33, 55, 178);
                 color: {TEXT_MID};
-                border: 1px solid rgba(255,255,255,25);
+                border: 1px solid rgba(157, 78, 221, 40);
                 border-radius: 18px;
                 padding: 8px 24px;
                 font-size: 12px;
                 font-family: 'DM Sans';
             }}
-            QPushButton:hover {{ background: rgba(255,255,255,25); color: {TEXT_HI}; }}
+            QPushButton:hover {{ background: rgba(44, 40, 66, 200); border-color: rgba(157, 78, 221, 100); color: {TEXT_HI}; }}
         """)
         self.btn_mute.clicked.connect(self._toggle_mute)
         bottom.addWidget(self.btn_mute)
@@ -186,27 +190,29 @@ class BreakOverlayWindow(QWidget):
         self.muted = not self.muted
         if self.muted:
             self._stop_sound()
-            self.btn_mute.setText("🔇 unmute")
+            self.btn_mute.setText(" unmute")
+            self.btn_mute.setIcon(QIcon(os.path.join(ASSETS_DIR, "icons", "volume-x.svg")))
         else:
-            self.btn_mute.setText("🔊 mute")
+            self.btn_mute.setText(" mute")
+            self.btn_mute.setIcon(QIcon(os.path.join(ASSETS_DIR, "icons", "volume-2.svg")))
             self._play_sound()
 
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        # Redesign uses very deep, almost opaque dark earthy tones
+        # Redesign uses deep premium dark neon tones
         bg = QLinearGradient(0, 0, 0, self.height())
         
         if self.controller.phase == "Long Break":
-            bg.setColorAt(0, QColor(15, 15, 19, 252))
-            bg.setColorAt(1, QColor(8, 8, 10, 252))
+            bg.setColorAt(0, QColor(18, 18, 26, 252))
+            bg.setColorAt(1, QColor(10, 10, 16, 252))
         elif self.controller.phase == "Short Break":
-            bg.setColorAt(0, QColor(20, 20, 28, 252))
-            bg.setColorAt(1, QColor(10, 10, 14, 252))
+            bg.setColorAt(0, QColor(26, 26, 36, 252))
+            bg.setColorAt(1, QColor(12, 12, 18, 252))
         else:
-            bg.setColorAt(0, QColor(26, 27, 38, 252))
-            bg.setColorAt(1, QColor(16, 16, 22, 252))
+            bg.setColorAt(0, QColor(20, 20, 30, 252))
+            bg.setColorAt(1, QColor(10, 10, 16, 252))
             
         p.fillRect(self.rect(), QBrush(bg))
         p.end()
