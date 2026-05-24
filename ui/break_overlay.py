@@ -4,7 +4,7 @@ import random
 import json
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 from PyQt6.QtCore import Qt, QTimer, QSize, QUrl, QSettings
-from PyQt6.QtGui import QFont, QMovie, QPainter, QColor, QBrush, QLinearGradient, QPainterPath, QIcon
+from PyQt6.QtGui import QFont, QMovie, QPainter, QColor, QBrush, QLinearGradient, QPainterPath, QIcon, QPixmap
 from controller import TimerController
 from assets import ASSETS_DIR
 
@@ -15,9 +15,9 @@ except ImportError:
     HAS_AUDIO = False
 
 # ── Design tokens (matching app.py) ──────────────────
-BG_0      = "#181623"
-BG_1      = "#221f32"
-ACCENT     = "#9d4edd"
+BG_0      = "#0f0d0e"
+BG_1      = "#171415"
+ACCENT     = "#FB7185"
 TEXT_HI    = "rgba(255,255,255,255)"
 TEXT_MID   = "rgba(255,255,255,190)"
 TEXT_LOW   = "rgba(255,255,255,120)"
@@ -62,7 +62,7 @@ class BreakOverlayWindow(QWidget):
 
     # ── helpers ───────────────────────────────
     def _pick_message(self):
-        s = QSettings("ScreenBreak", "ScreenBreak")
+        s = QSettings("GoofyFocus", "GoofyFocus")
         if getattr(self, '_is_pro', False):
             short_raw = s.value("custom_messages_short", "[]")
             long_raw  = s.value("custom_messages_long",  "[]")
@@ -133,6 +133,14 @@ class BreakOverlayWindow(QWidget):
             self.movie.setScaledSize(QSize(360, 360))
             self.gif_label.setMovie(self.movie)
             self.movie.start()
+            self.gif_label.setStyleSheet("""
+                QLabel {
+                    background: rgba(255, 255, 255, 8);
+                    border: 1px solid rgba(255, 255, 255, 26);
+                    border-radius: 20px;
+                    padding: 10px;
+                }
+            """)
         else:
             self.gif_label.setText("◡")
             self.gif_label.setFont(QFont("DM Sans", 80, QFont.Weight.Light))
@@ -166,15 +174,19 @@ class BreakOverlayWindow(QWidget):
         self.btn_mute.setIconSize(QSize(16, 16))
         self.btn_mute.setStyleSheet(f"""
             QPushButton {{
-                background: rgba(36, 33, 55, 178);
+                background: rgba(255, 255, 255, 13);
                 color: {TEXT_MID};
-                border: 1px solid rgba(157, 78, 221, 40);
+                border: 1px solid rgba(255, 255, 255, 31);
                 border-radius: 18px;
                 padding: 8px 24px;
                 font-size: 12px;
                 font-family: 'DM Sans';
             }}
-            QPushButton:hover {{ background: rgba(44, 40, 66, 200); border-color: rgba(157, 78, 221, 100); color: {TEXT_HI}; }}
+            QPushButton:hover {{ 
+                background: rgba(255, 255, 255, 26); 
+                border-color: {ACCENT}; 
+                color: {TEXT_HI}; 
+            }}
         """)
         self.btn_mute.clicked.connect(self._toggle_mute)
         bottom.addWidget(self.btn_mute)
@@ -201,20 +213,32 @@ class BreakOverlayWindow(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        # Redesign uses deep premium dark neon tones
-        bg = QLinearGradient(0, 0, 0, self.height())
-        
+        # 1. Paint a rich, solid dark gradient background (no bad bg_bokeh picture)
+        tint = QLinearGradient(0, 0, 0, self.height())
         if self.controller.phase == "Long Break":
-            bg.setColorAt(0, QColor(18, 18, 26, 252))
-            bg.setColorAt(1, QColor(10, 10, 16, 252))
-        elif self.controller.phase == "Short Break":
-            bg.setColorAt(0, QColor(26, 26, 36, 252))
-            bg.setColorAt(1, QColor(12, 12, 18, 252))
+            # Elegant deep green-tinted dark gradient
+            tint.setColorAt(0.0, QColor(10, 18, 14))
+            tint.setColorAt(1.0, QColor(5, 8, 6))
         else:
-            bg.setColorAt(0, QColor(20, 20, 30, 252))
-            bg.setColorAt(1, QColor(10, 10, 16, 252))
+            # Elegant deep purple/violet-tinted dark gradient
+            tint.setColorAt(0.0, QColor(16, 11, 20))
+            tint.setColorAt(1.0, QColor(8, 5, 10))
+        p.fillRect(self.rect(), QBrush(tint))
+        
+        # 2. Draw frosted noise texture grain
+        if not hasattr(self, 'noise_pixmap'):
+            self.noise_pixmap = QPixmap(128, 128)
+            self.noise_pixmap.fill(Qt.GlobalColor.transparent)
+            pn = QPainter(self.noise_pixmap)
+            import random
+            for x in range(128):
+                for y in range(128):
+                    val = random.randint(0, 255)
+                    pn.setPen(QColor(255, 255, 255, int(val * 0.03))) # Very low opacity noise grain
+                    pn.drawPoint(x, y)
+            pn.end()
             
-        p.fillRect(self.rect(), QBrush(bg))
+        p.drawTiledPixmap(self.rect(), self.noise_pixmap)
         p.end()
 
     def _update_timer(self, secs: int):

@@ -9,12 +9,13 @@ from plotly.subplots import make_subplots
 from assets import USER_DATA_DIR
 
 # ── Design tokens (matching app.py) ──────────────────
-BG_0      = "#161514"
-BG_1      = "#1c1b19"
-ACCENT     = "#849d8a"
-TEXT_HI    = "rgba(255,255,255,235)"
-TEXT_MID   = "rgba(255,255,255,140)"
-TEXT_LOW   = "rgba(255,255,255,76)"
+BG_0      = "#0f0d0e"
+BG_1      = "#171415"
+ACCENT     = "#FB7185"
+ACCENT_2   = "#A78BFA"
+TEXT_HI    = "rgba(255,255,255,255)"
+TEXT_MID   = "rgba(255,255,255,190)"
+TEXT_LOW   = "rgba(255,255,255,120)"
 
 def generate_dashboard(user_info: dict):
     """
@@ -59,7 +60,7 @@ def generate_dashboard(user_info: dict):
         phase_sum, values='duration_min', names='phase',
         hole=0.5, title="Time Distribution by Phase",
         template="plotly_dark",
-        color_discrete_sequence=[ACCENT, "#a1bfa8", "#5e7062"]
+        color_discrete_sequence=[ACCENT, ACCENT_2, "#818cf8"]
     )
     fig_phase.update_layout(
         plot_bgcolor=BG_0, paper_bgcolor=BG_0,
@@ -108,12 +109,12 @@ def generate_dashboard(user_info: dict):
         f.write(f"""
         <html>
         <head>
-            <title>ScreenBreak Focus Dashboard</title>
+            <title>Goofy Focus Dashboard</title>
             <style>
                 body {{ background-color: {BG_0}; color: {TEXT_HI}; font-family: 'DM Sans', sans-serif; margin: 0; padding: 20px; }}
                 h1 {{ color: {ACCENT}; text-align: center; }}
                 .container {{ display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; }}
-                .chart {{ width: 45%; min-width: 400px; background: {BG_1}; padding: 10px; border-radius: 15px; border: 1px solid {TEXT_LOW}; }}
+                .chart {{ width: 45%; min-width: 400px; background: {BG_1}; padding: 10px; border-radius: 15px; border: 1px solid rgba(251, 113, 133, 40); }}
                 @media (max-width: 900px) {{ .chart {{ width: 95%; }} }}
             </style>
         </head>

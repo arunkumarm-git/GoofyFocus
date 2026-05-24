@@ -1,5 +1,5 @@
-# ScreenBreak ⏳
-ScreenBreak is a beautiful, minimalist desktop break reminder built with Python and PyQt6. It helps you maintain focus and build healthy screen habits by enforcing scheduled breaks with elegant, full-screen overlays, local GIF integration, and soothing audio cues.
+# Goofy Focus ⏳
+Goofy Focus is a beautiful, minimalist desktop break reminder built with Python and PyQt6. It helps you maintain focus and build healthy screen habits by enforcing scheduled breaks with elegant, full-screen overlays, local GIF integration, and soothing audio cues.
 ## ✨ Features
 * **Smart Phase Timer:** Automatically cycles between Work (25m), Short Breaks (5m), and Long Breaks (15m).
 * **Minimalist UI:** A sleek, transparent circular timer that stays out of your way.
@@ -9,11 +9,11 @@ ScreenBreak is a beautiful, minimalist desktop break reminder built with Python 
 * **Google OAuth Login:** Secure session handling to personalize your experience.
 * **Built-in Feedback:** Integrated Supabase connection for direct-to-developer feedback.
 ## 🚀 Getting Started (Development)
-To run ScreenBreak locally for testing or development:
+To run Goofy Focus locally for testing or development:
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/arunkumarm-git/ScreenBreak_App.git
-   cd ScreenBreak
+   git clone https://github.com/arunkumarm-git/GoofyFocus.git
+   cd GoofyFocus
    ```
 2. **Set up a virtual environment:**
    ```bash
@@ -41,7 +41,7 @@ Because this project is source-available and governed by a proprietary license, 
 2. **Contributor License Agreement (CLA):** By submitting a Pull Request to this repository, you agree to assign the copyright of your contributed code to the project owner (Arun Kumar M). This ensures the project can be legally maintained and protected under its commercial licensing model.
 ## ⚖️ License & Usage
 **Copyright (c) 2026 Arun Kumar M. All Rights Reserved.**
-ScreenBreak is **Source-Available, not Open Source**. The code is public for portfolio and educational viewing. 
+Goofy Focus is **Source-Available, not Open Source**. The code is public for portfolio and educational viewing. 
 * **Personal/General Use:** You must obtain explicit permission before using, modifying, distributing, or packaging this software. (Exception granted for local development as outlined in the Contributing section).
 * **Commercial Use:** Any commercial application of this software, its source code, or derivative works is strictly prohibited without a separately negotiated commercial license and royalty agreement.
 For permission requests, commercial licensing inquiries, and royalty negotiations, please reach out via GitHub Issues or directly to the author.

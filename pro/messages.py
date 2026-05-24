@@ -5,13 +5,14 @@ from PyQt6.QtCore import Qt, QRectF, QSettings
 from PyQt6.QtGui import QPainter, QColor, QPainterPath, QLinearGradient, QBrush, QPen, QFont
 
 # ── Design tokens (matching app.py) ──────────────────
-BG_0      = "#161514"
-BG_1      = "#1c1b19"
-ACCENT     = "#849d8a"
-TEXT_HI    = "rgba(255,255,255,235)"
-TEXT_MID   = "rgba(255,255,255,140)"
-TEXT_LOW   = "rgba(255,255,255,76)"
-BORDER     = "rgba(255,255,255,20)"
+BG_0      = "#0f0d0e"
+BG_1      = "#171415"
+ACCENT     = "#FB7185"
+ACCENT_2   = "#A78BFA"
+TEXT_HI    = "rgba(255,255,255,255)"
+TEXT_MID   = "rgba(255,255,255,190)"
+TEXT_LOW   = "rgba(255,255,255,120)"
+BORDER     = "rgba(251, 113, 133, 40)"
 
 class CustomMessagesWindow(QWidget):
     def __init__(self, is_pro: bool, parent=None):
@@ -20,6 +21,14 @@ class CustomMessagesWindow(QWidget):
         self.setFixedSize(540, 480)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        # Soft premium drop shadow
+        self.shadow = QGraphicsDropShadowEffect(self)
+        self.shadow.setBlurRadius(35)
+        self.shadow.setColor(QColor(0, 0, 0, 160))
+        self.shadow.setOffset(0, 8)
+        self.setGraphicsEffect(self.shadow)
+        
         self._build_ui()
         self._load_messages()
 
@@ -53,15 +62,15 @@ class CustomMessagesWindow(QWidget):
         save_btn.setFixedHeight(38)
         save_btn.setStyleSheet(f"""
             QPushButton {{
-                background: rgba(132,157,138,38);
-                color: rgba(220,190,255,230);
-                border: 1px solid rgba(132,157,138,64);
+                background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 {ACCENT}, stop:1 {ACCENT_2});
+                color: white;
+                border: none;
                 border-radius: 10px;
                 font-size: 12px;
                 font-family: 'DM Sans';
-                font-weight: 500;
+                font-weight: 600;
             }}
-            QPushButton:hover {{ background: rgba(132,157,138,64); color: white; }}
+            QPushButton:hover {{ background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #4df6ff, stop:1 #ff409f); color: white; }}
         """)
         save_btn.clicked.connect(self._save_messages)
         root.addWidget(save_btn)
@@ -78,8 +87,8 @@ class CustomMessagesWindow(QWidget):
         list_w = QListWidget()
         list_w.setStyleSheet(f"""
             QListWidget {{ 
-                background: rgba(255,255,255,8); 
-                border: 1px solid {BORDER}; 
+                background: rgba(255, 255, 255, 13); 
+                border: 1px solid rgba(255, 255, 255, 31); 
                 border-radius: 8px; 
                 padding: 4px; 
                 color: {TEXT_MID}; 
@@ -87,11 +96,22 @@ class CustomMessagesWindow(QWidget):
                 font-family: 'DM Sans';
             }}
             QListWidget::item {{ padding: 6px; border-bottom: 1px solid rgba(255,255,255,5); }}
-            QListWidget::item:selected {{ background: rgba(132,157,138,38); color: {TEXT_HI}; border-radius: 4px; }}
+            QListWidget::item:selected {{ background: rgba(251, 113, 133, 38); color: {TEXT_HI}; border-radius: 4px; }}
         """)
         col.addWidget(list_w)
 
-        input_style = f"background: rgba(255,255,255,13); border: 1px solid {BORDER}; border-radius: 6px; padding: 6px 10px; color: {TEXT_HI}; font-size: 11px; font-family: 'DM Sans';"
+        input_style = f"""
+            QLineEdit {{
+                background: rgba(255, 255, 255, 13);
+                border: 1px solid rgba(255, 255, 255, 31);
+                border-radius: 6px;
+                padding: 6px 10px;
+                color: {TEXT_HI};
+                font-size: 11px;
+                font-family: 'DM Sans';
+            }}
+            QLineEdit:focus {{ border-color: {ACCENT}; background: rgba(255, 255, 255, 20); }}
+        """
         head_input = QLineEdit()
         head_input.setPlaceholderText("Headline (e.g. stretch)")
         head_input.setStyleSheet(input_style)
@@ -103,11 +123,11 @@ class CustomMessagesWindow(QWidget):
         col.addWidget(sub_input)
 
         btn_row = QHBoxLayout()
-        btn_add = QPushButton("add" if self._is_pro else "🔒 pro")
-        btn_add.setStyleSheet(f"QPushButton {{ background: rgba(132,157,138,38); color: {ACCENT}; border-radius: 6px; padding: 6px; font-size: 11px; font-family: 'DM Sans'; }} QPushButton:hover {{ background: rgba(132,157,138,64); }}")
+        btn_add = QPushButton("add")
+        btn_add.setStyleSheet(f"QPushButton {{ background: rgba(251, 113, 133, 20); color: {ACCENT}; border: 1px solid rgba(255, 255, 255, 31); border-radius: 6px; padding: 6px; font-size: 11px; font-family: 'DM Sans'; font-weight: 600; }} QPushButton:hover {{ background: rgba(251, 113, 133, 40); color: white; }}")
         
         btn_del = QPushButton("delete")
-        btn_del.setStyleSheet(f"QPushButton {{ background: rgba(255,255,255,13); color: {TEXT_LOW}; border-radius: 6px; padding: 6px; font-size: 11px; font-family: 'DM Sans'; }} QPushButton:hover {{ color: {TEXT_MID}; }}")
+        btn_del.setStyleSheet(f"QPushButton {{ background: rgba(255,255,255,13); color: {TEXT_LOW}; border-radius: 6px; padding: 6px; font-size: 11px; font-family: 'DM Sans'; }} QPushButton:hover {{ background: rgba(255, 100, 100, 25); color: #ffaaaa; }}")
         
         btn_row.addWidget(btn_add)
         btn_row.addWidget(btn_del)
@@ -137,7 +157,7 @@ class CustomMessagesWindow(QWidget):
             list_w.takeItem(list_w.row(item))
 
     def _load_messages(self):
-        s = QSettings("ScreenBreak", "ScreenBreak")
+        s = QSettings("GoofyFocus", "GoofyFocus")
         short_raw = s.value("custom_messages_short", "[]")
         long_raw  = s.value("custom_messages_long", "[]")
         try:
@@ -159,7 +179,7 @@ class CustomMessagesWindow(QWidget):
         for i in range(self.long_list.count()):
             long.append(self.long_list.item(i).data(Qt.ItemDataRole.UserRole))
         
-        s = QSettings("ScreenBreak", "ScreenBreak")
+        s = QSettings("GoofyFocus", "GoofyFocus")
         s.setValue("custom_messages_short", json.dumps(short))
         s.setValue("custom_messages_long", json.dumps(long))
         self.close()
@@ -169,10 +189,17 @@ class CustomMessagesWindow(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         path = QPainterPath()
         path.addRoundedRect(QRectF(self.rect()), 20, 20)
+        
+        # Opaque dark gradient fill
         bg = QLinearGradient(0, 0, 0, self.height())
-        bg.setColorAt(0, QColor(BG_1))
-        bg.setColorAt(1, QColor(BG_0))
+        bg.setColorAt(0, QColor("#1D1822"))
+        bg.setColorAt(1, QColor("#110E14"))
         p.fillPath(path, QBrush(bg))
-        p.setPen(QPen(QColor(255, 255, 255, 20), 1))
+        
+        # Glass double-highlight border
+        border_grad = QLinearGradient(0, 0, self.width(), self.height())
+        border_grad.setColorAt(0.0, QColor(255, 255, 255, 60))
+        border_grad.setColorAt(1.0, QColor(255, 255, 255, 10))
+        p.setPen(QPen(border_grad, 1.2))
         p.drawPath(path)
         p.end()

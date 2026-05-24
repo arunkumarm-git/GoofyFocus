@@ -6,13 +6,14 @@ from PyQt6.QtGui import QPainter, QColor, QPainterPath, QLinearGradient, QBrush,
 from auth import get_supabase_client
 
 # ── Design tokens (matching app.py) ──────────────────
-BG_0      = "#161514"
-BG_1      = "#1c1b19"
-ACCENT     = "#849d8a"
-TEXT_HI    = "rgba(255,255,255,235)"
-TEXT_MID   = "rgba(255,255,255,140)"
-TEXT_LOW   = "rgba(255,255,255,76)"
-BORDER     = "rgba(255,255,255,20)"
+BG_0      = "#0f0d0e"
+BG_1      = "#171415"
+ACCENT     = "#FB7185"
+ACCENT_2   = "#A78BFA"
+TEXT_HI    = "rgba(255,255,255,255)"
+TEXT_MID   = "rgba(255,255,255,190)"
+TEXT_LOW   = "rgba(255,255,255,120)"
+BORDER     = "rgba(251, 113, 133, 40)"
 
 # ──────────────────────────────────────────────
 # FEEDBACK WINDOW
@@ -26,6 +27,14 @@ class FeedbackWindow(QWidget):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self._rating = 0
+        
+        # Soft premium drop shadow
+        self.shadow = QGraphicsDropShadowEffect(self)
+        self.shadow.setBlurRadius(35)
+        self.shadow.setColor(QColor(0, 0, 0, 160))
+        self.shadow.setOffset(0, 8)
+        self.setGraphicsEffect(self.shadow)
+        
         self._build_ui()
 
     def _build_ui(self):
@@ -62,7 +71,7 @@ class FeedbackWindow(QWidget):
             s.setFixedSize(40, 40)
             s.setStyleSheet(
                 f"QPushButton {{ background: transparent; color: {TEXT_LOW}; border: none; font-size: 24px; }} "
-                f"QPushButton:hover {{ color: #a1bfa8; }}")
+                f"QPushButton:hover {{ color: {ACCENT_2}; }}")
             s.clicked.connect(lambda _, r=i: self._set_rating(r))
             stars_row.addWidget(s)
             self._star_btns.append(s)
@@ -80,32 +89,33 @@ class FeedbackWindow(QWidget):
         self.msg_box.setFixedHeight(120)
         self.msg_box.setStyleSheet(f"""
             QTextEdit {{
-                background: rgba(255,255,255,8);
-                border: 1px solid {BORDER};
+                background: rgba(255, 255, 255, 13);
+                border: 1px solid rgba(255, 255, 255, 31);
                 border-radius: 10px;
                 padding: 10px;
                 color: {TEXT_HI};
                 font-size: 12px;
                 font-family: 'DM Sans';
             }}
+            QTextEdit:focus {{ border-color: {ACCENT}; background: rgba(255, 255, 255, 20); }}
         """)
         root.addWidget(self.msg_box)
-
+ 
         # Submit button
         self.btn_submit = QPushButton("send feedback")
         self.btn_submit.setFixedHeight(40)
         self.btn_submit.setStyleSheet(f"""
             QPushButton {{
-                background: rgba(132,157,138,38);
-                color: rgba(220,190,255,230);
-                border: 1px solid rgba(132,157,138,64);
+                background: rgba(251, 113, 133, 20);
+                color: {ACCENT};
+                border: 1px solid rgba(255, 255, 255, 31);
                 border-radius: 12px;
                 padding: 8px;
                 font-size: 13px;
                 font-family: 'DM Sans';
-                font-weight: 500;
+                font-weight: 600;
             }}
-            QPushButton:hover {{ background: rgba(132,157,138,64); color: white; }}
+            QPushButton:hover {{ background: rgba(251, 113, 133, 40); color: white; border-color: {ACCENT_2}; }}
         """)
         self.btn_submit.clicked.connect(self._submit)
         root.addWidget(self.btn_submit)
@@ -122,8 +132,8 @@ class FeedbackWindow(QWidget):
             btn.setText("★" if i < rating else "☆")
             btn.setStyleSheet(
                 f"QPushButton {{ background: transparent; border: none; font-size: 24px; "
-                f"color: {'#849d8a' if i < rating else 'rgba(255,255,255,51)'}; }}"
-                f"QPushButton:hover {{ color: #a1bfa8; }}"
+                f"color: {'#FB7185' if i < rating else 'rgba(255,255,255,51)'}; }}"
+                f"QPushButton:hover {{ color: #A78BFA; }}"
             )
 
     def _submit(self):
@@ -159,12 +169,20 @@ class FeedbackWindow(QWidget):
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
         path = QPainterPath()
         path.addRoundedRect(QRectF(self.rect()), 20, 20)
+        
+        # Opaque dark gradient fill
         bg = QLinearGradient(0, 0, 0, self.height())
-        bg.setColorAt(0, QColor(BG_1))
-        bg.setColorAt(1, QColor(BG_0))
+        bg.setColorAt(0, QColor("#1D1822"))
+        bg.setColorAt(1, QColor("#110E14"))
         p.fillPath(path, QBrush(bg))
-        p.setPen(QPen(QColor(255, 255, 255, 20), 1))
+        
+        # Glass double-highlight border
+        border_grad = QLinearGradient(0, 0, self.width(), self.height())
+        border_grad.setColorAt(0.0, QColor(255, 255, 255, 60))
+        border_grad.setColorAt(1.0, QColor(255, 255, 255, 10))
+        p.setPen(QPen(border_grad, 1.2))
         p.drawPath(path)
         p.end()

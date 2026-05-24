@@ -7,13 +7,14 @@ from auth import get_supabase_client, save_cached_user
 import requests
 
 # ── Design tokens (matching app.py) ──────────────────
-BG_0      = "#161514"
-BG_1      = "#1c1b19"
-ACCENT     = "#849d8a"
-TEXT_HI    = "rgba(255,255,255,235)"
-TEXT_MID   = "rgba(255,255,255,140)"
-TEXT_LOW   = "rgba(255,255,255,76)"
-BORDER     = "rgba(255,255,255,20)"
+BG_0      = "#0f0d0e"
+BG_1      = "#171415"
+ACCENT     = "#FB7185"
+ACCENT_2   = "#A78BFA"
+TEXT_HI    = "rgba(255,255,255,255)"
+TEXT_MID   = "rgba(255,255,255,190)"
+TEXT_LOW   = "rgba(255,255,255,120)"
+BORDER     = "rgba(251, 113, 133, 40)"
 
 class UpgradeDialog(QWidget):
     def __init__(self, main_window, parent=None):
@@ -22,6 +23,14 @@ class UpgradeDialog(QWidget):
         self.setFixedSize(360, 520)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        # Soft premium drop shadow
+        self.shadow = QGraphicsDropShadowEffect(self)
+        self.shadow.setBlurRadius(35)
+        self.shadow.setColor(QColor(0, 0, 0, 160))
+        self.shadow.setOffset(0, 8)
+        self.setGraphicsEffect(self.shadow)
+        
         self._build_ui()
 
     def _build_ui(self):
@@ -68,15 +77,15 @@ class UpgradeDialog(QWidget):
         self.btn_buy.setFixedHeight(44)
         self.btn_buy.setStyleSheet(f"""
             QPushButton {{
-                background: rgba(132,157,138,51);
-                color: rgba(220,190,255,242);
-                border: 1px solid rgba(132,157,138,89);
+                background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 {ACCENT}, stop:1 {ACCENT_2});
+                color: white;
+                border: none;
                 border-radius: 12px;
                 font-size: 13px;
                 font-family: 'DM Sans';
                 font-weight: 600;
             }}
-            QPushButton:hover {{ background: rgba(132,157,138,76); color: white; }}
+            QPushButton:hover {{ background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #ff8da1, stop:1 #bfa3ff); color: white; }}
         """)
         self.btn_buy.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://screenbreak.lemonsqueezy.com/checkout/buy/2d24af9e-4d6a-41b9-aa06-c37525f76955")))
         root.addWidget(self.btn_buy)
@@ -87,14 +96,15 @@ class UpgradeDialog(QWidget):
         self.key_input.setPlaceholderText("Already have a key?")
         self.key_input.setStyleSheet(f"""
             QLineEdit {{
-                background: rgba(255,255,255,10);
-                border: 1px solid {BORDER};
+                background: rgba(255, 255, 255, 13);
+                border: 1px solid rgba(255, 255, 255, 31);
                 border-radius: 8px;
                 padding: 8px 12px;
                 color: {TEXT_HI};
                 font-size: 11px;
                 font-family: 'DM Sans';
             }}
+            QLineEdit:focus {{ border-color: {ACCENT}; background: rgba(255, 255, 255, 20); }}
         """)
         key_layout.addWidget(self.key_input)
 
@@ -102,14 +112,16 @@ class UpgradeDialog(QWidget):
         self.btn_activate.setFixedHeight(34)
         self.btn_activate.setStyleSheet(f"""
             QPushButton {{
-                background: rgba(255,255,255,15);
-                color: {TEXT_MID};
+                background: rgba(251, 113, 133, 20);
+                color: {ACCENT};
+                border: 1px solid rgba(255, 255, 255, 31);
                 border-radius: 8px;
                 padding: 0 16px;
                 font-size: 11px;
                 font-family: 'DM Sans';
+                font-weight: 600;
             }}
-            QPushButton:hover {{ background: rgba(255,255,255,25); color: {TEXT_HI}; }}
+            QPushButton:hover {{ background: rgba(251, 113, 133, 40); color: white; }}
         """)
         self.btn_activate.clicked.connect(self._try_activate)
         key_layout.addWidget(self.btn_activate)
@@ -177,11 +189,17 @@ class UpgradeDialog(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         path = QPainterPath()
         path.addRoundedRect(QRectF(self.rect()), 16, 16)
+        
+        # Opaque dark gradient fill
         bg = QLinearGradient(0, 0, 0, self.height())
-        # Warm earthy background
-        bg.setColorAt(0, QColor(35, 33, 31, 252))
-        bg.setColorAt(1, QColor(22, 21, 20, 252))
+        bg.setColorAt(0, QColor("#1D1822"))
+        bg.setColorAt(1, QColor("#110E14"))
         p.fillPath(path, QBrush(bg))
-        p.setPen(QPen(QColor(132, 157, 138, 40), 1))
+        
+        # Glass double-highlight border
+        border_grad = QLinearGradient(0, 0, self.width(), self.height())
+        border_grad.setColorAt(0.0, QColor(255, 255, 255, 60))
+        border_grad.setColorAt(1.0, QColor(255, 255, 255, 10))
+        p.setPen(QPen(border_grad, 1.2))
         p.drawPath(path)
         p.end()

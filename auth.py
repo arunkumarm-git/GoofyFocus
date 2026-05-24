@@ -60,13 +60,13 @@ def perform_login():
     else:
         info["is_pro"] = False
 
-    s = QSettings("ScreenBreak", "ScreenBreak")
+    s = QSettings("GoofyFocus", "GoofyFocus")
     s.setValue("user_info", json.dumps(info))
     return info
 
 def load_cached_user():
     """Returns cached user info if available."""
-    s = QSettings("ScreenBreak", "ScreenBreak")
+    s = QSettings("GoofyFocus", "GoofyFocus")
     saved = s.value("user_info", None)
     if saved:
         try:
@@ -76,5 +76,5 @@ def load_cached_user():
     return None
 
 def logout_user():
-    s = QSettings("ScreenBreak", "ScreenBreak")
+    s = QSettings("GoofyFocus", "GoofyFocus")
     s.remove("user_info")

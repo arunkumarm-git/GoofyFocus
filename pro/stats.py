@@ -11,24 +11,34 @@ from auth import get_supabase_client
 from .dashboard import generate_dashboard
 
 # ── Design tokens (matching app.py) ──────────────────
-BG_0      = "#161514"
-BG_1      = "#1c1b19"
-ACCENT     = "#849d8a"
-ACCENT_DIM = "rgba(132,157,138,38)"
-ACCENT_BDR = "rgba(132,157,138,64)"
-TEXT_HI    = "rgba(255,255,255,235)"
-TEXT_MID   = "rgba(255,255,255,140)"
-TEXT_LOW   = "rgba(255,255,255,76)"
-BORDER     = "rgba(255,255,255,20)"
+BG_0      = "#0f0d0e"
+BG_1      = "#171415"
+ACCENT     = "#FB7185"
+ACCENT_DIM = "rgba(251, 113, 133, 45)"
+ACCENT_BDR = "rgba(251, 113, 133, 100)"
+TEXT_HI    = "rgba(255,255,255,255)"
+TEXT_MID   = "rgba(255,255,255,190)"
+TEXT_LOW   = "rgba(255,255,255,120)"
+BORDER     = "rgba(251, 113, 133, 40)"
 
 class StatsWindow(QWidget):
-    def __init__(self, user_info: dict, is_pro: bool, active_elapsed_secs: int = 0, parent=None):
+    def __init__(self, user_info: dict, is_pro: bool, active_elapsed_secs: int = 0, is_embedded: bool = False, parent=None):
         super().__init__(parent)
         self._user_info = user_info
         self._is_pro    = is_pro
         self._active_elapsed_secs = active_elapsed_secs
-        self.setFixedSize(320, 420)
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
+        self._is_embedded = is_embedded
+        if not is_embedded:
+            self.setFixedSize(320, 420)
+            self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
+            
+            # Soft premium drop shadow
+            self.shadow = QGraphicsDropShadowEffect(self)
+            self.shadow.setBlurRadius(35)
+            self.shadow.setColor(QColor(0, 0, 0, 160))
+            self.shadow.setOffset(0, 8)
+            self.setGraphicsEffect(self.shadow)
+            
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self._build_ui()
         if is_pro:
@@ -40,20 +50,21 @@ class StatsWindow(QWidget):
         root.setSpacing(16)
 
         # Title bar
-        tb = QHBoxLayout()
-        title = QLabel("focus stats")
-        title.setFont(QFont("DM Mono", 12))
-        title.setStyleSheet(f"color: {TEXT_HI}; background: transparent;")
-        tb.addWidget(title)
-        tb.addStretch()
-        close_btn = QPushButton("×")
-        close_btn.setFixedSize(24, 24)
-        close_btn.setStyleSheet(
-            f"QPushButton {{ background: transparent; color: {TEXT_LOW}; border: none; font-size: 18px; }} "
-            f"QPushButton:hover {{ color: {TEXT_HI}; }}")
-        close_btn.clicked.connect(self.close)
-        tb.addWidget(close_btn)
-        root.addLayout(tb)
+        if not self._is_embedded:
+            tb = QHBoxLayout()
+            title = QLabel("focus stats")
+            title.setFont(QFont("DM Mono", 12))
+            title.setStyleSheet(f"color: {TEXT_HI}; background: transparent;")
+            tb.addWidget(title)
+            tb.addStretch()
+            close_btn = QPushButton("×")
+            close_btn.setFixedSize(24, 24)
+            close_btn.setStyleSheet(
+                f"QPushButton {{ background: transparent; color: {TEXT_LOW}; border: none; font-size: 18px; }} "
+                f"QPushButton:hover {{ color: {TEXT_HI}; }}")
+            close_btn.clicked.connect(self.close)
+            tb.addWidget(close_btn)
+            root.addLayout(tb)
 
         # Stats Grid
         self.lbl_today  = self._add_stat_row(root, "Today", "-- min")
@@ -69,7 +80,7 @@ class StatsWindow(QWidget):
             self.btn_dashboard.setFixedHeight(36)
             self.btn_dashboard.setStyleSheet(f"""
                 QPushButton {{ 
-                    background: {ACCENT_DIM if 'ACCENT_DIM' in globals() else 'rgba(132,157,138,38)'}; 
+                    background: {ACCENT_DIM}; 
                     color: white; 
                     border: 1px solid {ACCENT};
                     border-radius: 10px; 
@@ -78,7 +89,7 @@ class StatsWindow(QWidget):
                     font-family: 'DM Sans';
                     font-weight: 500;
                 }}
-                QPushButton:hover {{ background: rgba(132,157,138,64); }}
+                QPushButton:hover {{ background: rgba(251, 113, 133, 75); }}
             """)
             self.btn_dashboard.clicked.connect(self._show_interactive_dashboard)
             root.addWidget(self.btn_dashboard)
@@ -89,8 +100,8 @@ class StatsWindow(QWidget):
             lock.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lock.setFont(QFont("DM Sans", 11))
             lock.setStyleSheet(f"""
-                color: {ACCENT}; background: rgba(132,157,138,25); 
-                padding: 12px; border-radius: 10px; border: 1px solid rgba(132,157,138,51);
+                color: {ACCENT}; background: rgba(251, 113, 133, 25); 
+                padding: 12px; border-radius: 10px; border: 1px solid rgba(251, 113, 133, 51);
             """)
             root.addWidget(lock)
         else:
@@ -106,7 +117,7 @@ class StatsWindow(QWidget):
                     font-size: 11px;
                     font-family: 'DM Sans';
                 }}
-                QPushButton:hover {{ background: rgba(255,255,255,25); color: {TEXT_HI}; }}
+                QPushButton:hover {{ background: rgba(255,255,255,25); color: {TEXT_HI}; border-color: {ACCENT}; }}
             """)
             self.btn_export.clicked.connect(self._export_csv)
             root.addWidget(self.btn_export)
@@ -232,7 +243,7 @@ class StatsWindow(QWidget):
             if self._is_pro: self.status_lbl.setText(f"load error: {str(e)[:30]}")
 
     def _export_csv(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Export Sessions", f"screenbreak_{datetime.date.today()}.csv", "CSV files (*.csv)")
+        path, _ = QFileDialog.getSaveFileName(self, "Export Sessions", f"goofyfocus_{datetime.date.today()}.csv", "CSV files (*.csv)")
         if not path: return
         self.btn_export.setText("exporting...")
         QApplication.processEvents()
@@ -297,11 +308,22 @@ class StatsWindow(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         path = QPainterPath()
-        path.addRoundedRect(QRectF(self.rect()), 20, 20)
-        bg = QLinearGradient(0, 0, 0, self.height())
-        bg.setColorAt(0, QColor(BG_1))
-        bg.setColorAt(1, QColor(BG_0))
-        p.fillPath(path, QBrush(bg))
-        p.setPen(QPen(QColor(255, 255, 255, 20), 1))
+        path.addRoundedRect(QRectF(self.rect()), 16, 16)
+        if self._is_embedded:
+            # Nested glass style
+            p.fillPath(path, QBrush(QColor(255, 255, 255, 10)))
+            p.setPen(QPen(QColor(255, 255, 255, 18), 1.0))
+        else:
+            # Floating dialog opaque gradient
+            bg = QLinearGradient(0, 0, 0, self.height())
+            bg.setColorAt(0, QColor("#1D1822"))
+            bg.setColorAt(1, QColor("#110E14"))
+            p.fillPath(path, QBrush(bg))
+            
+            # Glass double-highlight border
+            border_grad = QLinearGradient(0, 0, self.width(), self.height())
+            border_grad.setColorAt(0.0, QColor(255, 255, 255, 60))
+            border_grad.setColorAt(1.0, QColor(255, 255, 255, 10))
+            p.setPen(QPen(border_grad, 1.2))
         p.drawPath(path)
         p.end()
