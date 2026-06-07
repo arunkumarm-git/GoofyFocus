@@ -4,6 +4,7 @@ import platform
 import os
 import json
 import datetime
+import threading
 
 if platform.system() == "Windows":
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("GoofyFocus")
@@ -22,7 +23,7 @@ from PyQt6.QtGui import (
 
 from controller import TimerController
 from assets import LocalAssetPicker, ASSETS_DIR
-from auth import perform_login, load_cached_user, logout_user
+from auth import perform_login, load_cached_user, logout_user, save_cached_user
 
 from ui.widgets import CircularTimer, DurationSpin
 from ui.break_overlay import BreakOverlayWindow
@@ -549,24 +550,27 @@ class MainWindow(QWidget):
         self._drag_pos        = None
         self._muted           = False
         self._user_info       = {}
-        self._is_pro          = True
+        self._is_pro          = False
         self._picker          = LocalAssetPicker()
 
         self.setWindowTitle("Goofy Focus")
         self.setFixedSize(750, 560)
 
-        # Generate noise texture for frosted glass
-        self.noise_pixmap = QPixmap(128, 128)
-        self.noise_pixmap.fill(Qt.GlobalColor.transparent)
-        pn = QPainter(self.noise_pixmap)
+        # Generate noise texture for frosted glass (optimized using QImage from raw bytes)
         import random
-        for x in range(128):
-            for y in range(128):
-                val = random.randint(0, 255)
-                # Paint white points with extremely low opacity for fine grain
-                pn.setPen(QColor(255, 255, 255, int(val * 0.04))) # Max ~4% opacity
-                pn.drawPoint(x, y)
-        pn.end()
+        from PyQt6.QtGui import QImage
+        width, height = 128, 128
+        img_data = bytearray(width * height * 4)
+        for i in range(width * height):
+            idx = i * 4
+            # Format is ARGB32 (little-endian on Windows: B, G, R, A)
+            img_data[idx] = 255      # B
+            img_data[idx+1] = 255    # G
+            img_data[idx+2] = 255    # R
+            img_data[idx+3] = random.randint(0, 10) # A (0 to ~4% opacity)
+        
+        qimg = QImage(img_data, width, height, QImage.Format.Format_ARGB32)
+        self.noise_pixmap = QPixmap.fromImage(qimg)
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
@@ -833,7 +837,7 @@ class MainWindow(QWidget):
                 border: 1px solid rgba(255, 255, 255, 20);
                 border-radius: 14px;
                 padding: 0px 18px;
-                height: 28px;
+                min-height: 28px;
                 color: rgba(255, 255, 255, 217);
                 font-family: 'DM Sans', sans-serif;
                 font-size: 10px;
@@ -960,6 +964,28 @@ class MainWindow(QWidget):
         """)
         self.btn_auth_page.clicked.connect(self._do_google_login)
         btn_row_auth.addWidget(self.btn_auth_page)
+        
+        self.btn_sync_profile = QPushButton("Sync Profile")
+        self.btn_sync_profile.setFixedHeight(36)
+        self.btn_sync_profile.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_sync_profile.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 10);
+                border: 1px solid rgba(255, 255, 255, 15);
+                border-radius: 10px;
+                padding: 0 16px;
+                color: rgba(255, 255, 255, 200);
+                font-family: 'DM Sans';
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: rgba(255, 255, 255, 18);
+                color: white;
+            }
+        """)
+        self.btn_sync_profile.clicked.connect(self._manual_sync_profile)
+        self.btn_sync_profile.setVisible(False)
+        btn_row_auth.addWidget(self.btn_sync_profile)
         
         self.btn_feedback_page = QPushButton("Send App Feedback")
         self.btn_feedback_page.setFixedHeight(36)
@@ -1161,22 +1187,78 @@ class MainWindow(QWidget):
         self.btn_custom_gifs.clicked.connect(self._show_gif_manager)
         self.btn_custom_sounds.clicked.connect(self._show_sound_manager)
 
-        lay.addWidget(_setting_row("Break messages", "text shown on rest screen", self.btn_custom_msgs))
+        # Break messages layout with lock icon
+        self._msgs_lock = QLabel()
+        self._msgs_lock.setPixmap(QIcon(os.path.join(ASSETS_DIR, "icons", "lock.svg")).pixmap(11, 11))
+        self._msgs_lock.setStyleSheet("background: transparent;")
+        op_msgs_lock = QGraphicsOpacityEffect(self._msgs_lock)
+        op_msgs_lock.setOpacity(0.45)
+        self._msgs_lock.setGraphicsEffect(op_msgs_lock)
+        
+        msgs_w = QWidget()
+        msgs_w.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        msgs_lay = QHBoxLayout(msgs_w)
+        msgs_lay.setContentsMargins(0, 0, 0, 0)
+        msgs_lay.setSpacing(5)
+        msgs_lay.addWidget(self._msgs_lock)
+        msgs_lay.addWidget(self.btn_custom_msgs)
+
+        # GIF packs layout with lock icon
+        self._gifs_lock = QLabel()
+        self._gifs_lock.setPixmap(QIcon(os.path.join(ASSETS_DIR, "icons", "lock.svg")).pixmap(11, 11))
+        self._gifs_lock.setStyleSheet("background: transparent;")
+        op_gifs_lock = QGraphicsOpacityEffect(self._gifs_lock)
+        op_gifs_lock.setOpacity(0.45)
+        self._gifs_lock.setGraphicsEffect(op_gifs_lock)
+        
+        gifs_w = QWidget()
+        gifs_w.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        gifs_lay = QHBoxLayout(gifs_w)
+        gifs_lay.setContentsMargins(0, 0, 0, 0)
+        gifs_lay.setSpacing(5)
+        gifs_lay.addWidget(self._gifs_lock)
+        gifs_lay.addWidget(self.btn_custom_gifs)
+
+        # Sounds layout with lock icon
+        self._sounds_lock = QLabel()
+        self._sounds_lock.setPixmap(QIcon(os.path.join(ASSETS_DIR, "icons", "lock.svg")).pixmap(11, 11))
+        self._sounds_lock.setStyleSheet("background: transparent;")
+        op_sounds_lock = QGraphicsOpacityEffect(self._sounds_lock)
+        op_sounds_lock.setOpacity(0.45)
+        self._sounds_lock.setGraphicsEffect(op_sounds_lock)
+        
+        sounds_w = QWidget()
+        sounds_w.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        sounds_lay = QHBoxLayout(sounds_w)
+        sounds_lay.setContentsMargins(0, 0, 0, 0)
+        sounds_lay.setSpacing(5)
+        sounds_lay.addWidget(self._sounds_lock)
+        sounds_lay.addWidget(self.btn_custom_sounds)
+
+        lay.addWidget(_setting_row("Break messages", "text shown on rest screen", msgs_w))
         lay.addWidget(_divider())
-        lay.addWidget(_setting_row("GIF packs",      "animated break visuals",    self.btn_custom_gifs))
+        lay.addWidget(_setting_row("GIF packs",      "animated break visuals",    gifs_w))
         lay.addWidget(_divider())
-        lay.addWidget(_setting_row("Sounds",          "ambient break audio",       self.btn_custom_sounds))
+        lay.addWidget(_setting_row("Sounds",          "ambient break audio",       sounds_w))
 
         # ── Save button ────────────────────────────────────────────────────────
         lay.addSpacing(14)
         self.btn_apply = QPushButton("save settings")
         self.btn_apply.setFixedHeight(38)
-        self.btn_apply.setStyleSheet(
-            f"QPushButton{{background:qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {ACCENT}, stop:1 {ACCENT_2});"
-            f"color:white; border:none; border-radius:10px;"
-            "font-size:11px;font-family:'DM Sans';font-weight:600;}}"
-            "QPushButton:hover{background:qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #ff8da1, stop:1 #bfa3ff);}"
-        )
+        self.btn_apply.setStyleSheet(f"""
+            QPushButton {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {ACCENT}, stop:1 {ACCENT_2});
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 11px;
+                font-family: 'DM Sans';
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #ff8da1, stop:1 #bfa3ff);
+            }}
+        """)
         save_row = QHBoxLayout()
         save_row.setContentsMargins(16, 0, 16, 14)
         save_row.addWidget(self.btn_apply)
@@ -1414,6 +1496,13 @@ class MainWindow(QWidget):
         self._spc_spin.setEnabled(is_pro)
         self._spc_lock.setVisible(not is_pro)
         
+        if hasattr(self, '_msgs_lock'):
+            self._msgs_lock.setVisible(not is_pro)
+        if hasattr(self, '_gifs_lock'):
+            self._gifs_lock.setVisible(not is_pro)
+        if hasattr(self, '_sounds_lock'):
+            self._sounds_lock.setVisible(not is_pro)
+        
         # Sync stats widget
         if hasattr(self, 'stats_widget'):
             self.stats_widget._is_pro = is_pro
@@ -1449,6 +1538,9 @@ class MainWindow(QWidget):
         if not hasattr(self, '_upgrade_win') or not self._upgrade_win.isVisible():
             self._upgrade_win = UpgradeDialog(main_window=self)
             self._upgrade_win.show()
+        else:
+            self._upgrade_win.raise_()
+            self._upgrade_win.activateWindow()
 
     def _open_feedback(self):
         self._feedback_win = FeedbackWindow(user_email=self._user_info.get("email", ""))
@@ -1458,9 +1550,10 @@ class MainWindow(QWidget):
         info = load_cached_user()
         if info:
             self._user_info = info
-            self._is_pro    = True
+            self._is_pro    = info.get("is_pro", False)
             self._refresh_pro_badge()
             self._set_login_state(info)
+            self._sync_pro_status()
 
     def _do_google_login(self):
         self.btn_auth_page.setText("signing in…")
@@ -1468,7 +1561,7 @@ class MainWindow(QWidget):
         try:
             info            = perform_login()
             self._user_info = info
-            self._is_pro    = True
+            self._is_pro    = info.get("is_pro", False)
             self._refresh_pro_badge()
             self._set_login_state(info)
         except Exception as e:
@@ -1509,6 +1602,7 @@ class MainWindow(QWidget):
         except Exception:
             pass
         self.btn_auth_page.clicked.connect(self._do_logout)
+        self.btn_sync_profile.setVisible(True)
 
     def _show_logout_menu(self):
         menu = QMenu(self)
@@ -1537,8 +1631,9 @@ class MainWindow(QWidget):
     def _do_logout(self):
         logout_user()
         self._user_info = {}
-        self._is_pro    = True
+        self._is_pro    = False
         self._refresh_pro_badge()
+        self.btn_sync_profile.setVisible(False)
         
         # Reset avatar
         self.btn_avatar.set_user({})
@@ -1570,6 +1665,79 @@ class MainWindow(QWidget):
         except Exception:
             pass
         self.btn_auth_page.clicked.connect(self._do_google_login)
+
+    def _sync_pro_status(self):
+        """Asynchronously check user's Pro status from Supabase to sync purchase status."""
+        sub = self._user_info.get("id") if self._user_info else None
+        if not sub:
+            return
+        
+        def worker():
+            from auth import get_supabase_client
+            sb = get_supabase_client()
+            if not sb:
+                return
+            try:
+                result = sb.table("users").select("is_pro").eq("google_sub", sub).execute()
+                rows = result.data
+                if rows:
+                    db_is_pro = rows[0].get("is_pro", False)
+                    QTimer.singleShot(0, lambda: self._apply_synced_pro_status(db_is_pro))
+            except Exception as e:
+                print(f"[sync_pro] Failed: {e}")
+                
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _apply_synced_pro_status(self, db_is_pro: bool):
+        if self._user_info and self._user_info.get("is_pro") != db_is_pro:
+            print(f"[sync_pro] Pro status updated from DB: {db_is_pro}")
+            self._user_info["is_pro"] = db_is_pro
+            self._is_pro = db_is_pro
+            save_cached_user(self._user_info)
+            self._refresh_pro_badge()
+
+    def _manual_sync_profile(self):
+        self.btn_sync_profile.setText("syncing...")
+        QApplication.processEvents()
+        
+        sub = self._user_info.get("id") if self._user_info else None
+        if not sub:
+            self.btn_sync_profile.setText("Sync Profile")
+            return
+            
+        from auth import get_supabase_client
+        sb = get_supabase_client()
+        if not sb:
+            self.btn_sync_profile.setText("Sync Profile")
+            self._set_status("sync failed", "rgba(248,113,113,160)")
+            return
+            
+        try:
+            result = sb.table("users").select("is_pro").eq("google_sub", sub).execute()
+            rows = result.data
+            if rows:
+                db_is_pro = rows[0].get("is_pro", False)
+                self._user_info["is_pro"] = db_is_pro
+                self._is_pro = db_is_pro
+                save_cached_user(self._user_info)
+                self._refresh_pro_badge()
+                
+                # Update stats widget if it exists
+                if hasattr(self, 'stats_widget'):
+                    self.stats_widget._is_pro = db_is_pro
+                    self.stats_widget._load_stats()
+                
+                if db_is_pro:
+                    self._set_status("pro synced ✓", GREEN)
+                else:
+                    self._set_status("synced ✓", GREEN)
+            else:
+                self._set_status("user not found", "rgba(248,113,113,160)")
+        except Exception as e:
+            print(f"[sync_pro] Manual sync failed: {e}")
+            self._set_status("sync failed", "rgba(248,113,113,160)")
+            
+        self.btn_sync_profile.setText("Sync Profile")
 
     # ── Window plumbing ────────────────────────────────────────────────────────
     def _minimize_to_tray(self):

@@ -9,8 +9,8 @@ datas = [
     ('assets', 'assets'),
     ('.env', '.'),
 ]
-if os.path.exists('client_secret.json'):
-    datas.append(('client_secret.json', '.'))
+if os.path.exists('.secrets/client_secret.json'):
+    datas.append(('.secrets/client_secret.json', '.secrets'))
 
 a = Analysis(
     ['app.py'],
@@ -28,6 +28,11 @@ a = Analysis(
         'dotenv',
         'PIL',
         'PIL.Image',
+        'pandas',
+        'plotly',
+        'plotly.graph_objects',
+        'plotly.express',
+        'plotly.subplots',
     ],
     hookspath=[],
     runtime_hooks=[],
@@ -38,64 +43,28 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
-if sys.platform == 'win32':
-    # ── Windows: single-file EXE ─────────────────────────────────────
-    exe = EXE(
-        pyz,
-        a.scripts,
-        a.binaries,
-        a.zipfiles,
-        a.datas,
-        [],
-        name='GoofyFocus',
-        debug=False,
-        bootloader_ignore_signals=False,
-        strip=False,
-        upx=True,
-        upx_exclude=[],
-        console=False,
-        icon='assets/icon.ico',
-        onefile=True,
-    )
-else:
-    # ── macOS: .app bundle ───────────────────────────────────────────
-    # onefile=False is required — COLLECT+BUNDLE need folder mode
-    exe = EXE(
-        pyz,
-        a.scripts,
-        [],
-        exclude_binaries=True,   # <-- required for COLLECT to work
-        name='GoofyFocus',
-        debug=False,
-        bootloader_ignore_signals=False,
-        strip=False,
-        upx=True,
-        console=False,
-        icon='assets/icon.icns',
-    )
+# ── Windows: directory build ──────────────────────────────────────
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name='GoofyFocus',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=False,
+    icon='assets/icon.ico',
+)
 
-    coll = COLLECT(
-        exe,
-        a.binaries,
-        a.zipfiles,
-        a.datas,
-        strip=False,
-        upx=True,
-        upx_exclude=[],
-        name='GoofyFocus',
-    )
-
-    app = BUNDLE(
-        coll,
-        name='GoofyFocus.app',
-        icon='assets/icon.icns',
-        bundle_identifier='com.arun.goofyfocus',
-        info_plist={
-            'CFBundleShortVersionString': '1.0.0',
-            'CFBundleVersion':            '1',
-            'NSHighResolutionCapable':    True,
-            'LSMinimumSystemVersion':     '10.14',
-            'NSPrincipalClass':           'NSApplication',
-            'NSAppleScriptEnabled':       False,
-        },
-    )
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='GoofyFocus',
+)

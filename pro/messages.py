@@ -1,6 +1,6 @@
 # pro/messages.py
 import json
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QLineEdit, QListWidgetItem, QApplication
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QLineEdit, QListWidgetItem, QApplication, QGraphicsDropShadowEffect
 from PyQt6.QtCore import Qt, QRectF, QSettings
 from PyQt6.QtGui import QPainter, QColor, QPainterPath, QLinearGradient, QBrush, QPen, QFont
 

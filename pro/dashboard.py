@@ -2,10 +2,6 @@ import os
 import json
 import datetime
 import webbrowser
-import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
 from assets import USER_DATA_DIR
 
 # ── Design tokens (matching app.py) ──────────────────
@@ -21,6 +17,11 @@ def generate_dashboard(user_info: dict):
     """
     Loads session data, generates a Plotly dashboard, and opens it in the browser.
     """
+    import pandas as pd
+    import plotly.graph_objects as go
+    import plotly.express as px
+    from plotly.subplots import make_subplots
+
     local_db = os.path.join(USER_DATA_DIR, "sessions.json")
     data = []
     

@@ -3,17 +3,20 @@ import datetime
 import csv
 import os
 import json
+import threading
 from collections import defaultdict
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog, QApplication
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog, QApplication, QGraphicsDropShadowEffect
 from PyQt6.QtCore import Qt, QRectF, QTimer
 from PyQt6.QtGui import QPainter, QColor, QPainterPath, QLinearGradient, QBrush, QPen, QFont
 from auth import get_supabase_client
 from .dashboard import generate_dashboard
+from .gate import CurrencyWorker
 
 # ── Design tokens (matching app.py) ──────────────────
 BG_0      = "#0f0d0e"
 BG_1      = "#171415"
 ACCENT     = "#FB7185"
+ACCENT_2   = "#A78BFA"
 ACCENT_DIM = "rgba(251, 113, 133, 45)"
 ACCENT_BDR = "rgba(251, 113, 133, 100)"
 TEXT_HI    = "rgba(255,255,255,255)"
@@ -21,9 +24,117 @@ TEXT_MID   = "rgba(255,255,255,190)"
 TEXT_LOW   = "rgba(255,255,255,120)"
 BORDER     = "rgba(251, 113, 133, 40)"
 
+class PromoAdCard(QWidget):
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+        self.main_window = main_window
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFixedHeight(150)
+        
+        self._build_ui()
+        
+        # Start currency worker thread
+        self.currency_worker = CurrencyWorker(1080)
+        self.currency_thread = threading.Thread(target=self.currency_worker.run)
+        self.currency_worker.finished.connect(self._on_currency_resolved)
+        self.currency_thread.start()
+
+    def _build_ui(self):
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(6)
+        
+        # Header layout
+        hl = QHBoxLayout()
+        icon = QLabel("✦")
+        icon.setStyleSheet(f"color: {ACCENT}; font-size: 14px; font-weight: bold; background: transparent;")
+        title = QLabel("unlock pro tier")
+        title.setFont(QFont("DM Mono", 11, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: white; background: transparent;")
+        hl.addWidget(icon)
+        hl.addWidget(title)
+        hl.addStretch()
+        
+        self.price_lbl = QLabel("₹1,080 lifetime")
+        self.price_lbl.setFont(QFont("DM Mono", 10, QFont.Weight.Bold))
+        self.price_lbl.setStyleSheet(f"color: {ACCENT}; background: transparent;")
+        hl.addWidget(self.price_lbl)
+        lay.addLayout(hl)
+        
+        # Description
+        desc = QLabel("Get interactive dashboard, CSV export, custom rest screen messages, sounds, and GIF packs.")
+        desc.setWordWrap(True)
+        desc.setFont(QFont("DM Sans", 9))
+        desc.setStyleSheet(f"color: {TEXT_MID}; background: transparent; line-height: 1.3;")
+        lay.addWidget(desc)
+        
+        lay.addStretch()
+        
+        # Call to Action button
+        self.btn_action = QPushButton("get pro now")
+        self.btn_action.setFixedHeight(30)
+        self.btn_action.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_action.setStyleSheet(f"""
+            QPushButton {{
+                background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 {ACCENT}, stop:1 {ACCENT_2});
+                color: white;
+                border: none;
+                border-radius: 9px;
+                font-size: 11px;
+                font-family: 'DM Sans';
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #ff8da1, stop:1 #bfa3ff);
+            }}
+        """)
+        self.btn_action.clicked.connect(self._open_upgrade)
+        lay.addWidget(self.btn_action)
+
+    def _on_currency_resolved(self, code, val, formatted_text):
+        self.price_lbl.setText(f"{formatted_text} lifetime")
+
+    def _open_upgrade(self):
+        # Resolve main window reference (traverse upwards if needed)
+        win = self.main_window
+        if not win:
+            # Fallback traversal
+            parent = self.parent()
+            while parent:
+                if hasattr(parent, '_show_upgrade_dialog'):
+                    win = parent
+                    break
+                parent = parent.parent()
+        if win and hasattr(win, '_show_upgrade_dialog'):
+            win._show_upgrade_dialog()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 12, 12)
+        
+        # Gorgeous glowing semi-transparent background
+        bg = QLinearGradient(0, 0, self.width(), self.height())
+        bg.setColorAt(0, QColor(251, 113, 133, 20))
+        bg.setColorAt(1, QColor(167, 139, 250, 20))
+        p.fillPath(path, QBrush(bg))
+        
+        # Border
+        border_pen = QPen()
+        border_pen.setWidthF(1.0)
+        border_grad = QLinearGradient(0, 0, self.width(), self.height())
+        border_grad.setColorAt(0.0, QColor(251, 113, 133, 80))
+        border_grad.setColorAt(1.0, QColor(167, 139, 250, 40))
+        border_pen.setBrush(QBrush(border_grad))
+        p.setPen(border_pen)
+        p.drawPath(path)
+        p.end()
+
 class StatsWindow(QWidget):
     def __init__(self, user_info: dict, is_pro: bool, active_elapsed_secs: int = 0, is_embedded: bool = False, parent=None):
         super().__init__(parent)
+        self.main_window = parent
         self._user_info = user_info
         self._is_pro    = is_pro
         self._active_elapsed_secs = active_elapsed_secs
@@ -74,59 +185,62 @@ class StatsWindow(QWidget):
 
         root.addStretch()
 
-        # Interactive Dashboard Button
-        if self._is_pro:
-            self.btn_dashboard = QPushButton("◈ view interactive dashboard")
-            self.btn_dashboard.setFixedHeight(36)
-            self.btn_dashboard.setStyleSheet(f"""
-                QPushButton {{ 
-                    background: {ACCENT_DIM}; 
-                    color: white; 
-                    border: 1px solid {ACCENT};
-                    border-radius: 10px; 
-                    padding: 6px; 
-                    font-size: 11px;
-                    font-family: 'DM Sans';
-                    font-weight: 500;
-                }}
-                QPushButton:hover {{ background: rgba(251, 113, 133, 75); }}
-            """)
-            self.btn_dashboard.clicked.connect(self._show_interactive_dashboard)
-            root.addWidget(self.btn_dashboard)
+        # Dashboard Button (Pro)
+        self.btn_dashboard = QPushButton("◈ view interactive dashboard")
+        self.btn_dashboard.setFixedHeight(36)
+        self.btn_dashboard.setStyleSheet(f"""
+            QPushButton {{ 
+                background: {ACCENT_DIM}; 
+                color: white; 
+                border: 1px solid {ACCENT};
+                border-radius: 10px; 
+                padding: 6px; 
+                font-size: 11px;
+                font-family: 'DM Sans';
+                font-weight: 500;
+            }}
+            QPushButton:hover {{ background: rgba(251, 113, 133, 75); }}
+        """)
+        self.btn_dashboard.clicked.connect(self._show_interactive_dashboard)
+        root.addWidget(self.btn_dashboard)
 
-        # Pro Lock / Export Button
-        if not self._is_pro:
-            lock = QLabel("🔒 unlock with pro")
-            lock.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lock.setFont(QFont("DM Sans", 11))
-            lock.setStyleSheet(f"""
-                color: {ACCENT}; background: rgba(251, 113, 133, 25); 
-                padding: 12px; border-radius: 10px; border: 1px solid rgba(251, 113, 133, 51);
-            """)
-            root.addWidget(lock)
-        else:
-            self.btn_export = QPushButton("↓ export csv")
-            self.btn_export.setFixedHeight(36)
-            self.btn_export.setStyleSheet(f"""
-                QPushButton {{ 
-                    background: rgba(255,255,255,13); 
-                    color: {TEXT_MID}; 
-                    border: 1px solid {BORDER};
-                    border-radius: 10px; 
-                    padding: 6px; 
-                    font-size: 11px;
-                    font-family: 'DM Sans';
-                }}
-                QPushButton:hover {{ background: rgba(255,255,255,25); color: {TEXT_HI}; border-color: {ACCENT}; }}
-            """)
-            self.btn_export.clicked.connect(self._export_csv)
-            root.addWidget(self.btn_export)
+        # Export Button (Pro)
+        self.btn_export = QPushButton("↓ export csv")
+        self.btn_export.setFixedHeight(36)
+        self.btn_export.setStyleSheet(f"""
+            QPushButton {{ 
+                background: rgba(255,255,255,13); 
+                color: {TEXT_MID}; 
+                border: 1px solid {BORDER};
+                border-radius: 10px; 
+                padding: 6px; 
+                font-size: 11px;
+                font-family: 'DM Sans';
+            }}
+            QPushButton:hover {{ background: rgba(255,255,255,25); color: {TEXT_HI}; border-color: {ACCENT}; }}
+        """)
+        self.btn_export.clicked.connect(self._export_csv)
+        root.addWidget(self.btn_export)
 
-            self.status_lbl = QLabel("")
-            self.status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.status_lbl.setFont(QFont("DM Mono", 10))
-            self.status_lbl.setStyleSheet(f"color: {TEXT_LOW}; background: transparent;")
-            root.addWidget(self.status_lbl)
+        self.status_lbl = QLabel("")
+        self.status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_lbl.setFont(QFont("DM Mono", 10))
+        self.status_lbl.setStyleSheet(f"color: {TEXT_LOW}; background: transparent;")
+        root.addWidget(self.status_lbl)
+
+        # Promo AD Card (Non-Pro replacement)
+        self.promo_card = PromoAdCard(self.main_window, self)
+        root.addWidget(self.promo_card)
+
+        # Update initial pro visibility states
+        self._update_pro_visibility()
+
+    def _update_pro_visibility(self):
+        is_pro = self._is_pro
+        self.btn_dashboard.setVisible(is_pro)
+        self.btn_export.setVisible(is_pro)
+        self.status_lbl.setVisible(is_pro)
+        self.promo_card.setVisible(not is_pro)
 
     def _add_stat_row(self, layout, label, value):
         row = QHBoxLayout()
@@ -148,6 +262,8 @@ class StatsWindow(QWidget):
         self.lbl_week.setText("0 sess")
         self.lbl_total.setText("0 hrs")
         self.lbl_streak.setText("0 days")
+        self._update_pro_visibility()
+
         if self._is_pro:
             self.status_lbl.setText("loading local stats...")
 

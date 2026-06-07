@@ -4,12 +4,12 @@ import sys
 import random
 from PyQt6.QtCore import QStandardPaths
 
-def _get_base_path():
+def get_base_path():
     if getattr(sys, 'frozen', False):
         return sys._MEIPASS
     return os.path.dirname(os.path.abspath(__file__))
 
-ASSETS_DIR = os.path.join(_get_base_path(), "assets")
+ASSETS_DIR = os.path.join(get_base_path(), "assets")
 
 USER_DATA_DIR = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
 USER_GIFS_DIR = os.path.join(USER_DATA_DIR, "gifs")

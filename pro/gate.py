@@ -1,10 +1,16 @@
 # pro/gate.py
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QApplication
-from PyQt6.QtCore import Qt, QTimer, QRectF
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QApplication, QGraphicsDropShadowEffect
+from PyQt6.QtCore import Qt, QTimer, QRectF, QUrl, QObject, pyqtSignal
 from PyQt6.QtGui import QPainter, QColor, QPainterPath, QLinearGradient, QBrush, QPen, QDesktopServices, QFont
-from PyQt6.QtCore import QUrl
 from auth import get_supabase_client, save_cached_user
 import requests
+import os
+import json
+import urllib.request
+import threading
+from dotenv import load_dotenv
+from assets import get_base_path
+load_dotenv(os.path.join(get_base_path(), ".env"))
 
 # ── Design tokens (matching app.py) ──────────────────
 BG_0      = "#0f0d0e"
@@ -16,13 +22,135 @@ TEXT_MID   = "rgba(255,255,255,190)"
 TEXT_LOW   = "rgba(255,255,255,120)"
 BORDER     = "rgba(251, 113, 133, 40)"
 
+def currency_from_country(country_code):
+    mapping = {
+        "IN": "INR",
+        "US": "USD",
+        "GB": "GBP",
+        "JP": "JPY",
+        "CA": "CAD",
+        "AU": "AUD",
+        "NZ": "NZD",
+        "SE": "SEK",
+        "CH": "CHF",
+        "CN": "CNY",
+        "AT": "EUR", "BE": "EUR", "CY": "EUR", "EE": "EUR", "FI": "EUR", 
+        "FR": "EUR", "DE": "EUR", "GR": "EUR", "IE": "EUR", "IT": "EUR", 
+        "LV": "EUR", "LT": "EUR", "LU": "EUR", "MT": "EUR", "NL": "EUR", 
+        "PT": "EUR", "SK": "EUR", "SI": "EUR", "ES": "EUR"
+    }
+    return mapping.get(country_code.upper(), "INR")
+
+class CurrencyWorker(QObject):
+    finished = pyqtSignal(str, float, str)  # currency_code, converted_value, formatted_text
+
+    def __init__(self, base_price_inr=1080):
+        super().__init__()
+        self.base_price_inr = base_price_inr
+
+    def run(self):
+        currency_code = "INR"
+        rate = 1.0
+        symbol = "₹"
+        
+        # 1. Geolocation lookup to determine user currency
+        # Try ip-api.com first as it does not return 403 blocks for standard client calls
+        try:
+            req = urllib.request.Request(
+                "http://ip-api.com/json/",
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
+            with urllib.request.urlopen(req, timeout=3) as response:
+                data = json.loads(response.read().decode())
+                country_code = data.get("countryCode", "IN")
+                currency_code = currency_from_country(country_code)
+        except Exception:
+            # Silent fallback to ipapi.co
+            try:
+                req = urllib.request.Request(
+                    "https://ipapi.co/json/",
+                    headers={"User-Agent": "Mozilla/5.0"}
+                )
+                with urllib.request.urlopen(req, timeout=3) as response:
+                    data = json.loads(response.read().decode())
+                    currency_code = data.get("currency", "INR")
+            except Exception:
+                currency_code = "INR"
+
+        symbols = {
+            "INR": "₹",
+            "USD": "$",
+            "EUR": "€",
+            "GBP": "£",
+            "JPY": "¥",
+            "CAD": "C$",
+            "AUD": "A$",
+            "CHF": "CHF ",
+            "CNY": "¥",
+            "SEK": "kr ",
+            "NZD": "NZ$",
+        }
+        symbol = symbols.get(currency_code, currency_code + " ")
+
+        # 2. Exchange rate fetch
+        if currency_code != "INR":
+            try:
+                url = f"https://open.er-api.com/v6/latest/INR"
+                req = urllib.request.Request(
+                    url,
+                    headers={"User-Agent": "Mozilla/5.0"}
+                )
+                with urllib.request.urlopen(req, timeout=3) as response:
+                    data = json.loads(response.read().decode())
+                    if data.get("result") == "success":
+                        rates = data.get("rates", {})
+                        rate = rates.get(currency_code, 1.0)
+            except Exception as e:
+                print(f"[currency] Exchange rate fetch failed: {e}")
+                # Common fallback rates if API is down
+                fallbacks = {
+                    "USD": 0.012,
+                    "EUR": 0.011,
+                    "GBP": 0.0094,
+                    "CAD": 0.016,
+                    "AUD": 0.018,
+                }
+                rate = fallbacks.get(currency_code, 1.0)
+                if rate == 1.0:
+                    currency_code = "INR"
+                    symbol = "₹"
+
+        converted = self.base_price_inr * rate
+        
+        # Nicely formatted currency output
+        if currency_code == "INR":
+            formatted = "₹1,080"
+        elif currency_code == "USD":
+            val = round(converted)
+            if val < converted:
+                val += 0.99
+            else:
+                val -= 0.01
+            formatted = f"${val:.2f}"
+        elif currency_code in ["EUR", "GBP", "CAD", "AUD"]:
+            val = round(converted) - 0.01
+            formatted = f"{symbol}{val:.2f}"
+        else:
+            formatted = f"{symbol}{round(converted):,}"
+
+        self.finished.emit(currency_code, converted, formatted)
+
 class UpgradeDialog(QWidget):
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
         self.main_window = main_window
-        self.setFixedSize(360, 520)
+        self.setFixedSize(360, 420)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        # Default currency fallback until resolved
+        self.resolved_currency = "INR"
+        self.resolved_amount = 1080.0
         
         # Soft premium drop shadow
         self.shadow = QGraphicsDropShadowEffect(self)
@@ -32,6 +160,12 @@ class UpgradeDialog(QWidget):
         self.setGraphicsEffect(self.shadow)
         
         self._build_ui()
+
+        # Start currency worker thread
+        self.currency_worker = CurrencyWorker(1080)
+        self.currency_thread = threading.Thread(target=self.currency_worker.run)
+        self.currency_worker.finished.connect(self._on_currency_resolved)
+        self.currency_thread.start()
 
     def _build_ui(self):
         root = QVBoxLayout(self)
@@ -73,7 +207,7 @@ class UpgradeDialog(QWidget):
         root.addStretch()
 
         # Buy Button
-        self.btn_buy = QPushButton("get pro — $9 lifetime")
+        self.btn_buy = QPushButton("get pro — ₹1,080 lifetime")
         self.btn_buy.setFixedHeight(44)
         self.btn_buy.setStyleSheet(f"""
             QPushButton {{
@@ -87,46 +221,10 @@ class UpgradeDialog(QWidget):
             }}
             QPushButton:hover {{ background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #ff8da1, stop:1 #bfa3ff); color: white; }}
         """)
-        self.btn_buy.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://screenbreak.lemonsqueezy.com/checkout/buy/2d24af9e-4d6a-41b9-aa06-c37525f76955")))
+        self.btn_buy.clicked.connect(self._open_checkout)
         root.addWidget(self.btn_buy)
 
-        # License Activation
-        key_layout = QHBoxLayout()
-        self.key_input = QLineEdit()
-        self.key_input.setPlaceholderText("Already have a key?")
-        self.key_input.setStyleSheet(f"""
-            QLineEdit {{
-                background: rgba(255, 255, 255, 13);
-                border: 1px solid rgba(255, 255, 255, 31);
-                border-radius: 8px;
-                padding: 8px 12px;
-                color: {TEXT_HI};
-                font-size: 11px;
-                font-family: 'DM Sans';
-            }}
-            QLineEdit:focus {{ border-color: {ACCENT}; background: rgba(255, 255, 255, 20); }}
-        """)
-        key_layout.addWidget(self.key_input)
 
-        self.btn_activate = QPushButton("activate")
-        self.btn_activate.setFixedHeight(34)
-        self.btn_activate.setStyleSheet(f"""
-            QPushButton {{
-                background: rgba(251, 113, 133, 20);
-                color: {ACCENT};
-                border: 1px solid rgba(255, 255, 255, 31);
-                border-radius: 8px;
-                padding: 0 16px;
-                font-size: 11px;
-                font-family: 'DM Sans';
-                font-weight: 600;
-            }}
-            QPushButton:hover {{ background: rgba(251, 113, 133, 40); color: white; }}
-        """)
-        self.btn_activate.clicked.connect(self._try_activate)
-        key_layout.addWidget(self.btn_activate)
-        
-        root.addLayout(key_layout)
 
         self.status = QLabel("")
         self.status.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -134,55 +232,63 @@ class UpgradeDialog(QWidget):
         self.status.setStyleSheet(f"color: {TEXT_LOW}; background: transparent;")
         root.addWidget(self.status)
 
-    def _try_activate(self):
-        key = self.key_input.text().strip()
-        sub = self.main_window._user_info.get("id") if self.main_window._user_info else None
-        
-        if not sub:
-            self.status.setText("please log in first via the main window")
-            return
-            
-        self.btn_activate.setText("...")
-        QApplication.processEvents()
-        
+    def _on_currency_resolved(self, code, val, formatted_text):
+        self.btn_buy.setText(f"get pro — {formatted_text} lifetime")
+        self.resolved_currency = code
+        self.resolved_amount = val
+
+    def _open_checkout(self):
         try:
-            # 1. Activate the key via LemonSqueezy API
-            ls_url = "https://api.lemonsqueezy.com/v1/licenses/activate"
-            payload = {
-                "license_key": key,
-                "instance_name": sub 
-            }
+            paypal_email = os.getenv("PAYPAL_BUSINESS_EMAIL")
+            if not paypal_email:
+                paypal_email = "your-paypal-business-email@example.com"
             
-            res = requests.post(ls_url, data=payload, headers={"Accept": "application/json"})
-            data = res.json()
+            paypal_mode = os.getenv("PAYPAL_MODE", "live").lower()
+            base_url = "https://www.paypal.com/cgi-bin/webscr" if paypal_mode == "live" else "https://www.sandbox.paypal.com/cgi-bin/webscr"
             
-            # Check if successfully activated OR if they are re-entering a key they already activated
-            if data.get("activated") or data.get("error") == "License key already activated.":
+            email = self.main_window._user_info.get("email") if self.main_window and self.main_window._user_info else ""
+            sub = self.main_window._user_info.get("id") if self.main_window and self.main_window._user_info else ""
+            
+            currency = getattr(self, "resolved_currency", "INR")
+            amount = getattr(self, "resolved_amount", 1080.0)
+            
+            # PayPal does not support INR for standard checkouts. Convert to USD fallback.
+            if currency == "INR":
+                currency = "USD"
+                amount = 12.99
                 
-                # Update Supabase
-                sb = get_supabase_client()
-                sb.table("users").update({"is_pro": True}).eq("google_sub", sub).execute()
-                
-                # Update main window UI natively
-                self.main_window._is_pro = True
-                self.main_window._user_info["is_pro"] = True
-                self.main_window._refresh_pro_badge()
-                
-                #Update the local cache so it survives app restart! <---
-                save_cached_user(self.main_window._user_info)
-                
-                self.status.setStyleSheet("color: #34d399; font-size: 11px; font-weight: bold;")
-                self.status.setText("✓ pro activated! welcome!")
-                QTimer.singleShot(2000, self.close)
+            if currency == "JPY":
+                amount_str = f"{int(round(amount))}"
             else:
-                self.btn_activate.setText("activate")
-                self.status.setStyleSheet("color: #f87171; font-size: 10px;")
-                self.status.setText(data.get("error", "invalid or already used key"))
+                amount_str = f"{amount:.2f}"
                 
+            import urllib.parse
+            params = {
+                "cmd": "_xclick",
+                "business": paypal_email,
+                "item_name": "GoofyFocus Pro Lifetime",
+                "amount": amount_str,
+                "currency_code": currency,
+                "no_shipping": "1",
+                "no_note": "1",
+            }
+            if sub:
+                params["custom"] = sub
+            if email:
+                params["email"] = email
+                
+            supabase_url = os.getenv("SUPABASE_URL")
+            if supabase_url:
+                params["notify_url"] = f"{supabase_url}/functions/v1/paypal-webhook"
+                
+            url = base_url + "?" + urllib.parse.urlencode(params)
+            print(f"[checkout] Opening URL: {url}")
+            QDesktopServices.openUrl(QUrl(url))
         except Exception as e:
-            self.btn_activate.setText("activate")
-            self.status.setText("couldn't verify — check connection")
-            print(f"[activate error] {e}")
+            print(f"[checkout error] Failed to open PayPal URL: {e}")
+            import traceback
+            traceback.print_exc()
+
 
     def paintEvent(self, event):
         p = QPainter(self)

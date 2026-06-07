@@ -1,14 +1,12 @@
 # auth.py
 import os
 import json
-from google_auth_oauthlib.flow import InstalledAppFlow
-import google.auth.transport.requests
 from supabase import create_client
 from PyQt6.QtCore import QSettings
-from assets import USER_DATA_DIR # or wherever you store settings
+from assets import USER_DATA_DIR, get_base_path
 
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(os.path.join(get_base_path(), ".env"))
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
@@ -25,7 +23,10 @@ def save_cached_user(user_info):
 
 def perform_login():
     """Handles Google OAuth and Supabase upsert."""
-    secret_path = ".secrets/client_secret.json"
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    import google.auth.transport.requests
+
+    secret_path = os.path.join(get_base_path(), ".secrets", "client_secret.json")
     if not os.path.exists(secret_path):
         print(f"[auth] Error: Missing {secret_path}")
         raise FileNotFoundError("Google client secret file missing.")
