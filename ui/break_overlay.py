@@ -2,9 +2,9 @@
 import os
 import random
 import json
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
-from PyQt6.QtCore import Qt, QTimer, QSize, QUrl, QSettings
-from PyQt6.QtGui import QFont, QMovie, QPainter, QColor, QBrush, QLinearGradient, QPainterPath, QIcon, QPixmap
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
+from PyQt6.QtCore import Qt, QTimer, QSize, QUrl, QSettings, QRectF
+from PyQt6.QtGui import QFont, QMovie, QPainter, QColor, QBrush, QLinearGradient, QPainterPath, QIcon, QPixmap, QPen
 from controller import TimerController
 from assets import ASSETS_DIR
 
@@ -39,6 +39,91 @@ BREAK_MESSAGES = {
         ("rest", "no rush — take your time"),
     ],
 }
+
+
+PILATES_EXERCISES = [
+    ("Neck Release", "Drop right ear to right shoulder for 10s. Repeat on left side to release desk strain."),
+    ("Shoulder Roll", "Roll shoulders backward 5 times, then forward 5 times to loosen upper back muscles."),
+    ("Seated Cat-Cow", "Inhale to arch back, look up. Exhale to round spine, look down. Repeat 5 times."),
+    ("Seated Twist", "Inhale tall, exhale and twist torso to right. Hold for 10s. Repeat on left side."),
+    ("Chest Opener", "Interlace fingers behind back, stretch arms straight, lift chest and look up."),
+    ("Wrist Stretch", "Extend arm, pull fingers back gently. Repeat each hand to release keyboard strain."),
+    ("Upper Trap Stretch", "Gently pull head towards shoulder with hand. Hold for 10s. Repeat on other side."),
+    ("Seated Figure 4", "Cross right ankle over left knee. Lean forward gently to stretch hips. Hold for 15s."),
+    ("Spine Stretch", "Sit tall, reach arms forward. Curve spine forward while exhaling to release back."),
+    ("Side Bend Stretch", "Reach right arm overhead, bend torso to the left. Hold for 10s. Repeat other side.")
+]
+
+
+class ExerciseCard(QWidget):
+    def __init__(self, title, exercises, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFixedSize(280, 260) # Fixed size to prevent layout squishing and text clipping
+        
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(22, 26, 22, 26)
+        lay.setSpacing(16)
+        lay.setAlignment(Qt.AlignmentFlag.AlignTop)
+        
+        header = QLabel(title)
+        header.setFont(QFont("DM Mono", 11, QFont.Weight.Bold))
+        header.setStyleSheet(f"color: {ACCENT}; background: transparent; text-transform: uppercase; letter-spacing: 1.5px;")
+        header.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        lay.addWidget(header)
+        
+        lay.addSpacing(6)
+        
+        for name, desc in exercises:
+            elay = QVBoxLayout()
+            elay.setSpacing(3)
+            
+            ename = QLabel(name)
+            ename.setFont(QFont("DM Sans", 11, QFont.Weight.Bold))
+            ename.setStyleSheet(f"color: {TEXT_HI}; background: transparent;")
+            ename.setWordWrap(True)
+            elay.addWidget(ename)
+            
+            edesc = QLabel(desc)
+            edesc.setFont(QFont("DM Sans", 9))
+            edesc.setStyleSheet(f"color: {TEXT_MID}; background: transparent;")
+            edesc.setWordWrap(True)
+            elay.addWidget(edesc)
+            
+            lay.addLayout(elay)
+            
+            # small divider
+            div = QFrame()
+            div.setFrameShape(QFrame.Shape.HLine)
+            div.setStyleSheet("background: rgba(255, 255, 255, 12); height: 1px; border: none;")
+            lay.addWidget(div)
+            
+        # Remove the last divider if we added one
+        if lay.count() > 0:
+            item = lay.itemAt(lay.count() - 1)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 18, 18)
+        
+        # Semi-transparent frosted glass gradient
+        bg = QLinearGradient(0, 0, 0, self.height())
+        bg.setColorAt(0.0, QColor(255, 255, 255, 12))
+        bg.setColorAt(1.0, QColor(255, 255, 255, 5))
+        p.fillPath(path, QBrush(bg))
+        
+        # Subtle glass highlight border
+        border_grad = QLinearGradient(0, 0, self.width(), self.height())
+        border_grad.setColorAt(0.0, QColor(255, 255, 255, 30))
+        border_grad.setColorAt(1.0, QColor(255, 255, 255, 5))
+        p.setPen(QPen(border_grad, 1.2))
+        p.drawPath(path)
+        p.end()
 
 
 class BreakOverlayWindow(QWidget):
@@ -107,24 +192,42 @@ class BreakOverlayWindow(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setSpacing(20)
-        layout.setContentsMargins(40, 40, 40, 40)
+        # Main horizontal layout to hold left stretching cards, center timer/GIF, and right stretching cards
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(60, 40, 60, 40)
+        main_layout.setSpacing(50)
+        main_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Randomly choose 4 unique exercises from the pool of 10
+        selected_exercises = random.sample(PILATES_EXERCISES, 4)
+        left_exercises = selected_exercises[:2]
+        right_exercises = selected_exercises[2:]
+
+        # Left Panel (Stretch breaks)
+        self.left_panel = ExerciseCard("stretch breaks", left_exercises, self)
+        main_layout.addWidget(self.left_panel, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        # Center Widget (Pomodoro timer content)
+        center_widget = QWidget()
+        center_widget.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        center_layout = QVBoxLayout(center_widget)
+        center_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        center_layout.setSpacing(20)
+        center_layout.setContentsMargins(0, 0, 0, 0)
 
         # phase tag
         phase_tag = QLabel(self.controller.phase.upper())
         phase_tag.setFont(QFont("DM Mono", 10))
         phase_tag.setStyleSheet(f"color: {ACCENT}; font-weight: 500; background: transparent;")
         phase_tag.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(phase_tag)
+        center_layout.addWidget(phase_tag)
 
         # headline
         hl = QLabel(self._headline)
         hl.setFont(QFont("DM Sans", 42, QFont.Weight.Light))
         hl.setStyleSheet(f"color: {TEXT_HI}; font-weight: 300; background: transparent;")
         hl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(hl)
+        center_layout.addWidget(hl)
 
         # GIF
         self.gif_label = QLabel()
@@ -146,7 +249,7 @@ class BreakOverlayWindow(QWidget):
             self.gif_label.setFont(QFont("DM Sans", 80, QFont.Weight.Light))
             self.gif_label.setStyleSheet(f"color: {TEXT_LOW}; background: transparent;")
         self.gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.gif_label)
+        center_layout.addWidget(self.gif_label)
 
         # countdown
         self.timer_label = QLabel("00:00")
@@ -154,14 +257,14 @@ class BreakOverlayWindow(QWidget):
         if self.timer_label.font().exactMatch(): self.timer_label.font().setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, -3)
         self.timer_label.setStyleSheet(f"color: {TEXT_HI}; font-weight: 300; background: transparent;")
         self.timer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.timer_label)
+        center_layout.addWidget(self.timer_label)
 
         # subtitle
         sub = QLabel(self._subtitle)
         sub.setFont(QFont("DM Sans", 14, QFont.Weight.Light))
         sub.setStyleSheet(f"color: {TEXT_MID}; font-weight: 300; background: transparent;")
         sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(sub)
+        center_layout.addWidget(sub)
 
         # bottom row — mute toggle + skip hint
         bottom = QHBoxLayout()
@@ -196,7 +299,12 @@ class BreakOverlayWindow(QWidget):
         hint.setStyleSheet(f"color: {TEXT_LOW}; background: transparent;")
         bottom.addWidget(hint)
 
-        layout.addLayout(bottom)
+        center_layout.addLayout(bottom)
+        main_layout.addWidget(center_widget, 1, Qt.AlignmentFlag.AlignCenter)
+
+        # Right Panel (Pilates stretches)
+        self.right_panel = ExerciseCard("pilates stretches", right_exercises, self)
+        main_layout.addWidget(self.right_panel, 0, Qt.AlignmentFlag.AlignVCenter)
 
     def _toggle_mute(self):
         self.muted = not self.muted

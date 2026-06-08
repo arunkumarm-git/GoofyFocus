@@ -34,7 +34,7 @@ from pro.stats import StatsWindow
 from pro.messages import CustomMessagesWindow
 from pro.media import GifPackManager, SoundManagerWindow
 
-CURRENT_VERSION = "1.0.0"
+CURRENT_VERSION = "1.0.1"
 
 
 # Helper to convert #AARRGGBB to rgba(r,g,b,a) for QSS stylesheets
@@ -542,6 +542,33 @@ class ProfileAvatar(QPushButton):
         p.end()
 
 
+# ── Pro Custom Spinbox ────────────────────────────────────────────────────────
+class ProSpinBox(QSpinBox):
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+        self.main_window = main_window
+
+    def mousePressEvent(self, event):
+        if not self.main_window._is_pro:
+            self.main_window._show_upgrade_dialog()
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def stepBy(self, steps):
+        if not self.main_window._is_pro:
+            self.main_window._show_upgrade_dialog()
+        else:
+            super().stepBy(steps)
+
+    def keyPressEvent(self, event):
+        if not self.main_window._is_pro:
+            self.main_window._show_upgrade_dialog()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+
+
 # ── Main Window ────────────────────────────────────────────────────────────────
 class MainWindow(QWidget):
     def __init__(self, controller: TimerController):
@@ -588,6 +615,7 @@ class MainWindow(QWidget):
         self.controller.reset()
         self._picker.start(is_pro=self._is_pro)
         self._check_updates()
+        self._refresh_pro_badge()
 
     # ── Build UI ───────────────────────────────────────────────────────────────
     def _build_ui(self):
@@ -653,7 +681,7 @@ class MainWindow(QWidget):
                 color: rgba(0, 0, 0, 160);
             }
         """)
-        btn_dot_min.clicked.connect(self._minimize_to_tray)
+        btn_dot_min.clicked.connect(self.showMinimized)
         
         btn_dot_max = QPushButton()
         btn_dot_max.setFixedSize(12, 12)
@@ -1158,10 +1186,9 @@ class MainWindow(QWidget):
         sl.setContentsMargins(0, 0, 0, 0)
         sl.setSpacing(5)
 
-        self._spc_spin = QSpinBox()
+        self._spc_spin = ProSpinBox(self)
         self._spc_spin.setRange(1, 12)
         self._spc_spin.setValue(4)
-        self._spc_spin.setEnabled(False)
         self._spc_spin.setFixedWidth(44)
         self._spc_spin.setStyleSheet(
             f"QSpinBox{{background:rgba(255,255,255,13);border:1px solid rgba(255,255,255,31);"
@@ -1170,7 +1197,7 @@ class MainWindow(QWidget):
             "QSpinBox::up-button,QSpinBox::down-button{width:0px;border:none;}"
         )
         self._spc_lock = QLabel()
-        self._spc_lock.setPixmap(QIcon(os.path.join(ASSETS_DIR, "icons", "lock.svg")).pixmap(11, 11))
+        self._spc_lock.setPixmap(QIcon(os.path.join(ASSETS_DIR, "icons", "lock.svg")).pixmap(16, 16))
         self._spc_lock.setStyleSheet("background: transparent;")
         op_lock = QGraphicsOpacityEffect(self._spc_lock)
         op_lock.setOpacity(0.45)
@@ -1193,7 +1220,7 @@ class MainWindow(QWidget):
 
         # Break messages layout with lock icon
         self._msgs_lock = QLabel()
-        self._msgs_lock.setPixmap(QIcon(os.path.join(ASSETS_DIR, "icons", "lock.svg")).pixmap(11, 11))
+        self._msgs_lock.setPixmap(QIcon(os.path.join(ASSETS_DIR, "icons", "lock.svg")).pixmap(16, 16))
         self._msgs_lock.setStyleSheet("background: transparent;")
         op_msgs_lock = QGraphicsOpacityEffect(self._msgs_lock)
         op_msgs_lock.setOpacity(0.45)
@@ -1209,7 +1236,7 @@ class MainWindow(QWidget):
 
         # GIF packs layout with lock icon
         self._gifs_lock = QLabel()
-        self._gifs_lock.setPixmap(QIcon(os.path.join(ASSETS_DIR, "icons", "lock.svg")).pixmap(11, 11))
+        self._gifs_lock.setPixmap(QIcon(os.path.join(ASSETS_DIR, "icons", "lock.svg")).pixmap(16, 16))
         self._gifs_lock.setStyleSheet("background: transparent;")
         op_gifs_lock = QGraphicsOpacityEffect(self._gifs_lock)
         op_gifs_lock.setOpacity(0.45)
@@ -1225,7 +1252,7 @@ class MainWindow(QWidget):
 
         # Sounds layout with lock icon
         self._sounds_lock = QLabel()
-        self._sounds_lock.setPixmap(QIcon(os.path.join(ASSETS_DIR, "icons", "lock.svg")).pixmap(11, 11))
+        self._sounds_lock.setPixmap(QIcon(os.path.join(ASSETS_DIR, "icons", "lock.svg")).pixmap(16, 16))
         self._sounds_lock.setStyleSheet("background: transparent;")
         op_sounds_lock = QGraphicsOpacityEffect(self._sounds_lock)
         op_sounds_lock.setOpacity(0.45)
@@ -1498,7 +1525,23 @@ class MainWindow(QWidget):
         is_pro = getattr(self, '_is_pro', False)
         self.settings_pro_badge.setVisible(is_pro)
         self.anal_pro_badge.setVisible(is_pro)
-        self._spc_spin.setEnabled(is_pro)
+        
+        # Configure self._spc_spin style and focus policy based on pro status
+        self._spc_spin.setFocusPolicy(Qt.FocusPolicy.StrongFocus if is_pro else Qt.FocusPolicy.NoFocus)
+        if is_pro:
+            self._spc_spin.setStyleSheet(
+                f"QSpinBox{{background:rgba(255,255,255,13);border:1px solid rgba(255,255,255,31);"
+                f"border-radius:8px;padding:4px 6px;color:{TEXT_HI};font-size:11px;font-weight:400;}}"
+                f"QSpinBox:focus{{border-color:{ACCENT};}}"
+                "QSpinBox::up-button,QSpinBox::down-button{width:0px;border:none;}"
+            )
+        else:
+            self._spc_spin.setStyleSheet(
+                f"QSpinBox{{background:rgba(255,255,255,8);border:1px solid rgba(255,255,255,15);"
+                f"border-radius:8px;padding:4px 6px;color:{TEXT_LOW};font-size:11px;font-weight:400;}}"
+                "QSpinBox::up-button,QSpinBox::down-button{width:0px;border:none;}"
+            )
+        
         self._spc_lock.setVisible(not is_pro)
         
         if hasattr(self, '_msgs_lock'):
@@ -1812,9 +1855,6 @@ class MainWindow(QWidget):
     def mouseReleaseEvent(self, e): self._drag_pos = None
 
     def changeEvent(self, event):
-        from PyQt6.QtCore import QEvent
-        if event.type() == QEvent.Type.WindowStateChange and self.isMinimized():
-            QTimer.singleShot(0, self._minimize_to_tray)
         super().changeEvent(event)
 
     def showEvent(self, event):

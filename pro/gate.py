@@ -44,100 +44,100 @@ def currency_from_country(country_code):
 class CurrencyWorker(QObject):
     finished = pyqtSignal(str, float, str)  # currency_code, converted_value, formatted_text
 
+    # Class-level session cache for resolved country code
+    _cached_country = None
+
     def __init__(self, base_price_inr=1080):
         super().__init__()
         self.base_price_inr = base_price_inr
 
     def run(self):
-        currency_code = "INR"
-        rate = 1.0
-        symbol = "₹"
-        
-        # 1. Geolocation lookup to determine user currency
-        # Try ip-api.com first as it does not return 403 blocks for standard client calls
-        try:
-            req = urllib.request.Request(
-                "http://ip-api.com/json/",
-                headers={"User-Agent": "Mozilla/5.0"}
-            )
-            with urllib.request.urlopen(req, timeout=3) as response:
-                data = json.loads(response.read().decode())
-                country_code = data.get("countryCode", "IN")
-                currency_code = currency_from_country(country_code)
-        except Exception:
-            # Silent fallback to ipapi.co
+        country_code = CurrencyWorker._cached_country
+
+        if not country_code:
+            # 1. Try Geolocation API lookup first to respect active network location/VPN/travel
             try:
                 req = urllib.request.Request(
-                    "https://ipapi.co/json/",
+                    "http://ip-api.com/json/",
                     headers={"User-Agent": "Mozilla/5.0"}
                 )
                 with urllib.request.urlopen(req, timeout=3) as response:
                     data = json.loads(response.read().decode())
-                    currency_code = data.get("currency", "INR")
+                    country_code = data.get("countryCode")
             except Exception:
-                currency_code = "INR"
+                try:
+                    req = urllib.request.Request(
+                        "https://ipapi.co/json/",
+                        headers={"User-Agent": "Mozilla/5.0"}
+                    )
+                    with urllib.request.urlopen(req, timeout=3) as response:
+                        data = json.loads(response.read().decode())
+                        country_code = data.get("country_code")
+                except Exception:
+                    pass
 
-        symbols = {
-            "INR": "₹",
-            "USD": "$",
-            "EUR": "€",
-            "GBP": "£",
-            "JPY": "¥",
-            "CAD": "C$",
-            "AUD": "A$",
-            "CHF": "CHF ",
-            "CNY": "¥",
-            "SEK": "kr ",
-            "NZD": "NZ$",
+            # 2. Determine country code via system locale fallback (fast, offline, reliable, free)
+            if not country_code:
+                import platform
+                if platform.system() == "Windows":
+                    try:
+                        import ctypes
+                        buf = ctypes.create_unicode_buffer(85)
+                        if ctypes.windll.kernel32.GetUserDefaultLocaleName(buf, 85):
+                            locale_name = buf.value
+                            if "-" in locale_name:
+                                country_code = locale_name.split("-")[-1].upper()
+                    except Exception:
+                        pass
+                
+                if not country_code:
+                    try:
+                        import locale
+                        locale.setlocale(locale.LC_ALL, '')
+                        loc, _ = locale.getlocale()
+                        if loc and "_" in loc:
+                            country_code = loc.split("_")[-1].upper()
+                    except Exception:
+                        pass
+                        
+                if not country_code:
+                    for var in ["LANG", "LC_ALL", "LC_CTYPE", "LANGUAGE"]:
+                        val = os.environ.get(var)
+                        if val and "_" in val:
+                            parts = val.split(".")[0].split("_")
+                            if len(parts) > 1:
+                                country_code = parts[1].upper()
+                                break
+
+            # 3. Ultimate fallback
+            if not country_code or country_code == "C":
+                country_code = "IN"
+
+            # Cache the successfully resolved country code
+            CurrencyWorker._cached_country = country_code
+
+        currency_code = currency_from_country(country_code)
+
+        # Fixed pricing dictionary: currency_code -> (numeric_amount, formatted_string)
+        FIXED_PRICES = {
+            "INR": (1080.0, "₹1,080"),
+            "USD": (10.99, "$10.99"),
+            "EUR": (10.99, "€10.99"),
+            "GBP": (9.99, "£9.99"),
+            "CAD": (14.99, "C$14.99"),
+            "AUD": (14.99, "A$14.99"),
+            "JPY": (1500.0, "¥1,500"),
+            "NZD": (16.99, "NZ$16.99"),
+            "CHF": (10.99, "CHF 10.99"),
+            "SEK": (115.0, "kr 115"),
+            "CNY": (79.0, "¥79"),
         }
-        symbol = symbols.get(currency_code, currency_code + " ")
 
-        # 2. Exchange rate fetch
-        if currency_code != "INR":
-            try:
-                url = f"https://open.er-api.com/v6/latest/INR"
-                req = urllib.request.Request(
-                    url,
-                    headers={"User-Agent": "Mozilla/5.0"}
-                )
-                with urllib.request.urlopen(req, timeout=3) as response:
-                    data = json.loads(response.read().decode())
-                    if data.get("result") == "success":
-                        rates = data.get("rates", {})
-                        rate = rates.get(currency_code, 1.0)
-            except Exception as e:
-                print(f"[currency] Exchange rate fetch failed: {e}")
-                # Common fallback rates if API is down
-                fallbacks = {
-                    "USD": 0.012,
-                    "EUR": 0.011,
-                    "GBP": 0.0094,
-                    "CAD": 0.016,
-                    "AUD": 0.018,
-                }
-                rate = fallbacks.get(currency_code, 1.0)
-                if rate == 1.0:
-                    currency_code = "INR"
-                    symbol = "₹"
+        # Fallback to USD if resolved currency not in fixed prices list
+        if currency_code not in FIXED_PRICES:
+            currency_code = "USD"
 
-        converted = self.base_price_inr * rate
-        
-        # Nicely formatted currency output
-        if currency_code == "INR":
-            formatted = "₹1,080"
-        elif currency_code == "USD":
-            val = round(converted)
-            if val < converted:
-                val += 0.99
-            else:
-                val -= 0.01
-            formatted = f"${val:.2f}"
-        elif currency_code in ["EUR", "GBP", "CAD", "AUD"]:
-            val = round(converted) - 0.01
-            formatted = f"{symbol}{val:.2f}"
-        else:
-            formatted = f"{symbol}{round(converted):,}"
-
+        converted, formatted = FIXED_PRICES[currency_code]
         self.finished.emit(currency_code, converted, formatted)
 
 class UpgradeDialog(QWidget):
@@ -163,7 +163,7 @@ class UpgradeDialog(QWidget):
 
         # Start currency worker thread
         self.currency_worker = CurrencyWorker(1080)
-        self.currency_thread = threading.Thread(target=self.currency_worker.run)
+        self.currency_thread = threading.Thread(target=self.currency_worker.run, daemon=True)
         self.currency_worker.finished.connect(self._on_currency_resolved)
         self.currency_thread.start()
 
@@ -255,7 +255,7 @@ class UpgradeDialog(QWidget):
             # PayPal does not support INR for standard checkouts. Convert to USD fallback.
             if currency == "INR":
                 currency = "USD"
-                amount = 12.99
+                amount = 10.99
                 
             if currency == "JPY":
                 amount_str = f"{int(round(amount))}"

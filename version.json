@@ -1,5 +1,5 @@
 {
-  "latest_version": "1.0.0",
+  "latest_version": "1.0.1",
   "download_url": "https://arunkumarm-git.itch.io/goofy-focus",
-  "release_notes": "First official release of Goofy Focus!"
+  "release_notes": "Added side exercise/pilates suggestions to break screen, fixed VPN currency detection, improved minimize behavior, and fixed background thread hangs."
 }

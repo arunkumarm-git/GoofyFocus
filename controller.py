@@ -24,14 +24,7 @@ class TimerController(QObject):
         self._qtimer = QTimer()
         self._qtimer.timeout.connect(self._on_tick)
 
-        self._skip_in_progress = False
-        self._skip_cooldown = QTimer()
-        self._skip_cooldown.setSingleShot(True)
-        self._skip_cooldown.setInterval(400)
-        self._skip_cooldown.timeout.connect(self._clear_skip_cooldown)
 
-    def _clear_skip_cooldown(self):
-        self._skip_in_progress = False
 
     def start(self):
         if not self.is_running:
@@ -44,15 +37,11 @@ class TimerController(QObject):
 
     def reset(self):
         self.pause()
-        self._skip_in_progress = False
-        self._skip_cooldown.stop()
         self.work_sessions = 0
         self.set_phase("Work")
 
     def skip(self):
-        if self._skip_in_progress: return
-        self._skip_in_progress = True
-        self._skip_cooldown.start()
+
 
         was_running = self.is_running
         self._qtimer.stop()

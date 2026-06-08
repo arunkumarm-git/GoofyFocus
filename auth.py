@@ -17,9 +17,17 @@ def get_supabase_client():
     return None
 
 def save_cached_user(user_info):
+    # Save to QSettings so load_cached_user() can find it
+    s = QSettings("GoofyFocus", "GoofyFocus")
+    s.setValue("user_info", json.dumps(user_info))
+    
+    # Also save to file cache for redundancy
     cache_path = os.path.join(USER_DATA_DIR, "session.json")
-    with open(cache_path, "w") as f:
-        json.dump(user_info, f)
+    try:
+        with open(cache_path, "w") as f:
+            json.dump(user_info, f)
+    except Exception as e:
+        print(f"[auth] Failed to write session.json: {e}")
 
 def perform_login():
     """Handles Google OAuth and Supabase upsert."""
@@ -74,8 +82,27 @@ def load_cached_user():
             return json.loads(saved)
         except Exception:
             pass
+            
+    # Fallback to session.json file cache
+    cache_path = os.path.join(USER_DATA_DIR, "session.json")
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, "r") as f:
+                info = json.load(f)
+                s.setValue("user_info", json.dumps(info))
+                return info
+        except Exception:
+            pass
     return None
 
 def logout_user():
     s = QSettings("GoofyFocus", "GoofyFocus")
     s.remove("user_info")
+    
+    cache_path = os.path.join(USER_DATA_DIR, "session.json")
+    if os.path.exists(cache_path):
+        try:
+            os.remove(cache_path)
+            print("[auth] Deleted cached session.json")
+        except Exception as e:
+            print(f"[auth] Failed to delete session.json: {e}")

@@ -35,7 +35,7 @@ class PromoAdCard(QWidget):
         
         # Start currency worker thread
         self.currency_worker = CurrencyWorker(1080)
-        self.currency_thread = threading.Thread(target=self.currency_worker.run)
+        self.currency_thread = threading.Thread(target=self.currency_worker.run, daemon=True)
         self.currency_worker.finished.connect(self._on_currency_resolved)
         self.currency_thread.start()
 
