@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QFrame, QGraphicsDropShadowEffect, QStackedWidget,
     QScrollArea, QLineEdit, QGraphicsOpacityEffect, QAbstractButton
 )
-from PyQt6.QtCore import Qt, QTimer, QRectF, QSettings, QSize, QEvent, QPropertyAnimation, QEasingCurve, pyqtProperty
+from PyQt6.QtCore import Qt, QTimer, QRectF, QSettings, QSize, QEvent, QPropertyAnimation, QEasingCurve, pyqtProperty, pyqtSignal
 from PyQt6.QtGui import (
     QFont, QPainter, QColor, QPen, QBrush, QLinearGradient,
     QPainterPath, QIcon, QAction, QPixmap
@@ -34,7 +34,7 @@ from pro.stats import StatsWindow
 from pro.messages import CustomMessagesWindow
 from pro.media import GifPackManager, SoundManagerWindow
 
-CURRENT_VERSION = "1.0.2"
+CURRENT_VERSION = "1.0.1"
 
 
 # Helper to convert #AARRGGBB to rgba(r,g,b,a) for QSS stylesheets
@@ -678,6 +678,8 @@ class ProSpinBox(QSpinBox):
 
 # ── Main Window ────────────────────────────────────────────────────────────────
 class MainWindow(QWidget):
+    update_detected = pyqtSignal(str, str)
+
     def __init__(self, controller: TimerController):
         super().__init__()
         self.controller       = controller
@@ -721,6 +723,7 @@ class MainWindow(QWidget):
         self._load_settings()
         self.controller.reset()
         self._picker.start(is_pro=self._is_pro)
+        self.update_detected.connect(self._notify_update)
         self._check_updates()
         self._refresh_pro_badge()
 
@@ -1947,14 +1950,16 @@ class MainWindow(QWidget):
                     if latest:
                         curr_parts = [int(x) for x in CURRENT_VERSION.split(".")]
                         late_parts = [int(x) for x in latest.split(".")]
+                        print(f"[update_check] Local: {curr_parts}, Remote: {late_parts}")
                         if late_parts > curr_parts:
-                            QTimer.singleShot(0, lambda: self._notify_update(latest, download_url))
+                            self.update_detected.emit(latest, download_url)
             except Exception as e:
                 print(f"[update_check] Failed to check for updates: {e}")
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _notify_update(self, latest: str, download_url: str):
+        print(f"[update_check] Triggering tray message for v{latest}...")
         self._update_url = download_url
         self.tray.showMessage(
             "Update Available ⏳",
