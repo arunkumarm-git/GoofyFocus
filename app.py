@@ -1024,6 +1024,19 @@ class MainWindow(QWidget):
             "border-radius:8px;padding:2px 6px;font-weight:600;"
         )
         settings_header.addWidget(self.settings_pro_badge)
+        
+        self.update_badge = QPushButton("Update Available ⏳")
+        self.update_badge.setStyleSheet(
+            f"QPushButton{{color:#ffffff;font-size:9px;font-family:'DM Sans';"
+            f"background:{ACCENT};border:none;"
+            "border-radius:8px;padding:2px 8px;font-weight:600;}"
+            f"QPushButton:hover{{background:{ACCENT_2};}}"
+        )
+        self.update_badge.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.update_badge.setVisible(False)
+        self.update_badge.clicked.connect(self._on_update_badge_clicked)
+        settings_header.addWidget(self.update_badge)
+        
         settings_header.addStretch()
         
         settings_lay.addLayout(settings_header)
@@ -1063,6 +1076,19 @@ class MainWindow(QWidget):
             "border-radius:8px;padding:2px 6px;font-weight:600;"
         )
         anal_header.addWidget(self.anal_pro_badge)
+        
+        self.anal_update_badge = QPushButton("Update Available ⏳")
+        self.anal_update_badge.setStyleSheet(
+            f"QPushButton{{color:#ffffff;font-size:9px;font-family:'DM Sans';"
+            f"background:{ACCENT};border:none;"
+            "border-radius:8px;padding:2px 8px;font-weight:600;}"
+            f"QPushButton:hover{{background:{ACCENT_2};}}"
+        )
+        self.anal_update_badge.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.anal_update_badge.setVisible(False)
+        self.anal_update_badge.clicked.connect(self._on_update_badge_clicked)
+        anal_header.addWidget(self.anal_update_badge)
+        
         anal_header.addStretch()
         
         anal_lay.addLayout(anal_header)
@@ -1961,12 +1987,26 @@ class MainWindow(QWidget):
     def _notify_update(self, latest: str, download_url: str):
         print(f"[update_check] Triggering tray message for v{latest}...")
         self._update_url = download_url
+        
+        if hasattr(self, 'update_badge'):
+            self.update_badge.setText(f"Update Available: v{latest} ⏳")
+            self.update_badge.setVisible(True)
+        if hasattr(self, 'anal_update_badge'):
+            self.anal_update_badge.setText(f"Update Available: v{latest} ⏳")
+            self.anal_update_badge.setVisible(True)
+
         self.tray.showMessage(
             "Update Available ⏳",
             f"Goofy Focus v{latest} is now available! Click this message to download.",
             QSystemTrayIcon.MessageIcon.Information,
             10000
         )
+
+    def _on_update_badge_clicked(self):
+        if self._update_url:
+            from PyQt6.QtGui import QDesktopServices
+            from PyQt6.QtCore import QUrl
+            QDesktopServices.openUrl(QUrl(self._update_url))
 
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
