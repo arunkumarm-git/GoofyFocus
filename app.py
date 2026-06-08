@@ -34,6 +34,8 @@ from pro.stats import StatsWindow
 from pro.messages import CustomMessagesWindow
 from pro.media import GifPackManager, SoundManagerWindow
 
+CURRENT_VERSION = "1.0.0"
+
 
 # Helper to convert #AARRGGBB to rgba(r,g,b,a) for QSS stylesheets
 def hex_to_rgba(hex_str):
@@ -552,6 +554,7 @@ class MainWindow(QWidget):
         self._user_info       = {}
         self._is_pro          = False
         self._picker          = LocalAssetPicker()
+        self._update_url      = None
 
         self.setWindowTitle("Goofy Focus")
         self.setFixedSize(750, 560)
@@ -584,6 +587,7 @@ class MainWindow(QWidget):
         self._load_settings()
         self.controller.reset()
         self._picker.start(is_pro=self._is_pro)
+        self._check_updates()
 
     # ── Build UI ───────────────────────────────────────────────────────────────
     def _build_ui(self):
@@ -1304,6 +1308,7 @@ class MainWindow(QWidget):
         menu.addActions([act_feedback, act_quit])
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(self._tray_activated)
+        self.tray.messageClicked.connect(self._on_tray_message_clicked)
         self.tray.show()
 
     # ── Signals ────────────────────────────────────────────────────────────────
@@ -1757,6 +1762,44 @@ class MainWindow(QWidget):
     def _tray_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
             self._show_from_tray()
+
+    def _on_tray_message_clicked(self):
+        if self._update_url:
+            from PyQt6.QtGui import QDesktopServices
+            from PyQt6.QtCore import QUrl
+            QDesktopServices.openUrl(QUrl(self._update_url))
+            self._update_url = None
+
+    def _check_updates(self):
+        """Asynchronously check for updates from a public configuration JSON file."""
+        def worker():
+            import urllib.request
+            import urllib.error
+            url = "https://raw.githubusercontent.com/arunkumarm-git/GoofyFocus/main/version.json"
+            try:
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    data = json.loads(response.read().decode('utf-8'))
+                    latest = data.get("latest_version")
+                    download_url = data.get("download_url", "https://arunkumarm-git.itch.io/goofy-focus")
+                    if latest:
+                        curr_parts = [int(x) for x in CURRENT_VERSION.split(".")]
+                        late_parts = [int(x) for x in latest.split(".")]
+                        if late_parts > curr_parts:
+                            QTimer.singleShot(0, lambda: self._notify_update(latest, download_url))
+            except Exception as e:
+                print(f"[update_check] Failed to check for updates: {e}")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _notify_update(self, latest: str, download_url: str):
+        self._update_url = download_url
+        self.tray.showMessage(
+            "Update Available ⏳",
+            f"Goofy Focus v{latest} is now available! Click this message to download.",
+            QSystemTrayIcon.MessageIcon.Information,
+            10000
+        )
 
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
