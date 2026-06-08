@@ -679,6 +679,7 @@ class ProSpinBox(QSpinBox):
 # ── Main Window ────────────────────────────────────────────────────────────────
 class MainWindow(QWidget):
     update_detected = pyqtSignal(str, str)
+    update_status   = pyqtSignal(bool, str)
 
     def __init__(self, controller: TimerController):
         super().__init__()
@@ -724,6 +725,7 @@ class MainWindow(QWidget):
         self.controller.reset()
         self._picker.start(is_pro=self._is_pro)
         self.update_detected.connect(self._notify_update)
+        self.update_status.connect(self._on_update_status)
         self._check_updates()
         self._refresh_pro_badge()
 
@@ -1026,15 +1028,24 @@ class MainWindow(QWidget):
         settings_header.addWidget(self.settings_pro_badge)
         
         self.update_badge = QPushButton("Update Available ⏳")
-        self.update_badge.setStyleSheet(
-            f"QPushButton{{color:#ffffff;font-size:9px;font-family:'DM Sans';"
-            f"background:{ACCENT};border:none;"
-            "border-radius:8px;padding:2px 8px;font-weight:600;}"
-            f"QPushButton:hover{{background:{ACCENT_2};}}"
-        )
+        self.update_badge.setStyleSheet(f"""
+            QPushButton {{
+                color: #ffffff;
+                font-size: 9px;
+                font-family: 'DM Sans';
+                background: {ACCENT};
+                border: none;
+                border-radius: 8px;
+                padding: 2px 8px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                background: {ACCENT_2};
+            }}
+        """)
         self.update_badge.setCursor(Qt.CursorShape.PointingHandCursor)
         self.update_badge.setVisible(False)
-        self.update_badge.clicked.connect(self._on_update_badge_clicked)
+        self.update_badge.clicked.connect(self._start_auto_update)
         settings_header.addWidget(self.update_badge)
         
         settings_header.addStretch()
@@ -1078,15 +1089,24 @@ class MainWindow(QWidget):
         anal_header.addWidget(self.anal_pro_badge)
         
         self.anal_update_badge = QPushButton("Update Available ⏳")
-        self.anal_update_badge.setStyleSheet(
-            f"QPushButton{{color:#ffffff;font-size:9px;font-family:'DM Sans';"
-            f"background:{ACCENT};border:none;"
-            "border-radius:8px;padding:2px 8px;font-weight:600;}"
-            f"QPushButton:hover{{background:{ACCENT_2};}}"
-        )
+        self.anal_update_badge.setStyleSheet(f"""
+            QPushButton {{
+                color: #ffffff;
+                font-size: 9px;
+                font-family: 'DM Sans';
+                background: {ACCENT};
+                border: none;
+                border-radius: 8px;
+                padding: 2px 8px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                background: {ACCENT_2};
+            }}
+        """)
         self.anal_update_badge.setCursor(Qt.CursorShape.PointingHandCursor)
         self.anal_update_badge.setVisible(False)
-        self.anal_update_badge.clicked.connect(self._on_update_badge_clicked)
+        self.anal_update_badge.clicked.connect(self._start_auto_update)
         anal_header.addWidget(self.anal_update_badge)
         
         anal_header.addStretch()
@@ -1972,7 +1992,12 @@ class MainWindow(QWidget):
                 with urllib.request.urlopen(req, timeout=5) as response:
                     data = json.loads(response.read().decode('utf-8'))
                     latest = data.get("latest_version")
-                    download_url = data.get("download_url", "https://arunkumarm-git.itch.io/goofy-focus")
+                    download_url = data.get("download_url", "https://arun-mass.itch.io/goofy-focus")
+                    update_zip_url = data.get("update_zip_url", "https://github.com/arunkumarm-git/GoofyFocus/archive/refs/heads/main.zip")
+                    
+                    self._update_url = download_url
+                    self._update_zip_url = update_zip_url
+                    
                     if latest:
                         curr_parts = [int(x) for x in CURRENT_VERSION.split(".")]
                         late_parts = [int(x) for x in latest.split(".")]
@@ -2002,11 +2027,93 @@ class MainWindow(QWidget):
             10000
         )
 
-    def _on_update_badge_clicked(self):
-        if self._update_url:
-            from PyQt6.QtGui import QDesktopServices
-            from PyQt6.QtCore import QUrl
-            QDesktopServices.openUrl(QUrl(self._update_url))
+    def _start_auto_update(self):
+        self.update_badge.setText("Downloading...")
+        self.update_badge.setEnabled(False)
+        if hasattr(self, 'anal_update_badge'):
+            self.anal_update_badge.setText("Downloading...")
+            self.anal_update_badge.setEnabled(False)
+            
+        def worker():
+            import urllib.request
+            import zipfile
+            import tempfile
+            import shutil
+            import subprocess
+            
+            zip_url = getattr(self, '_update_zip_url', "https://github.com/arunkumarm-git/GoofyFocus/archive/refs/heads/main.zip")
+            
+            try:
+                temp_dir = tempfile.mkdtemp()
+                zip_path = os.path.join(temp_dir, "update.zip")
+                
+                # Download update zip
+                req = urllib.request.Request(zip_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=30) as response, open(zip_path, 'wb') as out_file:
+                    out_file.write(response.read())
+                
+                # Extract zip file
+                extract_dir = os.path.join(temp_dir, "extract")
+                os.makedirs(extract_dir, exist_ok=True)
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(extract_dir)
+                
+                # Find source dir (accounting for GitHub root folder inside zip)
+                items = os.listdir(extract_dir)
+                if len(items) == 1 and os.path.isdir(os.path.join(extract_dir, items[0])):
+                    src_dir = os.path.join(extract_dir, items[0])
+                else:
+                    src_dir = extract_dir
+                
+                # Current running dir and batch file path
+                current_dir = os.path.abspath(os.path.dirname(sys.argv[0]))
+                batch_path = os.path.join(temp_dir, "install_update.bat")
+                
+                # Build startup command
+                if getattr(sys, 'frozen', False):
+                    start_cmd = f'start "" "{sys.executable}"'
+                else:
+                    script_path = os.path.abspath(sys.argv[0])
+                    start_cmd = f'start "" "{sys.executable}" "{script_path}"'
+                
+                # Write Windows update batch script
+                with open(batch_path, "w") as f:
+                    f.write(f"""@echo off
+title Goofy Focus Updater
+echo Waiting for Goofy Focus to close...
+timeout /t 2 /nobreak > nul
+echo Copying new files to {current_dir}...
+xcopy /s /y /i "{src_dir}\\*" "{current_dir}\\"
+echo Restarting Goofy Focus...
+cd /d "{current_dir}"
+{start_cmd}
+echo Clean up...
+rd /s /q "{src_dir}"
+del "%~f0"
+""")
+                
+                # Start batch script in background detached
+                subprocess.Popen(["cmd.exe", "/c", batch_path], creationflags=subprocess.CREATE_NO_WINDOW)
+                self.update_status.emit(True, "Updating...")
+            except Exception as e:
+                print(f"[auto_update] Error: {e}")
+                self.update_status.emit(False, str(e))
+                
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_update_status(self, success: bool, message: str):
+        if success:
+            self.update_badge.setText("Restarting...")
+            if hasattr(self, 'anal_update_badge'):
+                self.anal_update_badge.setText("Restarting...")
+            QTimer.singleShot(500, self._quit_app)
+        else:
+            self.update_badge.setText("Update Failed ❌")
+            self.update_badge.setEnabled(True)
+            if hasattr(self, 'anal_update_badge'):
+                self.anal_update_badge.setText("Update Failed ❌")
+                self.anal_update_badge.setEnabled(True)
+            self._set_status(f"Update failed: {message}", "rgba(248,113,113,160)")
 
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
