@@ -13,9 +13,9 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QSpinBox, QSystemTrayIcon, QMenu, QSizePolicy,
     QComboBox, QFrame, QGraphicsDropShadowEffect, QStackedWidget,
-    QScrollArea, QLineEdit, QGraphicsOpacityEffect
+    QScrollArea, QLineEdit, QGraphicsOpacityEffect, QAbstractButton
 )
-from PyQt6.QtCore import Qt, QTimer, QRectF, QSettings, QSize
+from PyQt6.QtCore import Qt, QTimer, QRectF, QSettings, QSize, QEvent, QPropertyAnimation, QEasingCurve, pyqtProperty
 from PyQt6.QtGui import (
     QFont, QPainter, QColor, QPen, QBrush, QLinearGradient,
     QPainterPath, QIcon, QAction, QPixmap
@@ -34,7 +34,7 @@ from pro.stats import StatsWindow
 from pro.messages import CustomMessagesWindow
 from pro.media import GifPackManager, SoundManagerWindow
 
-CURRENT_VERSION = "1.0.1"
+CURRENT_VERSION = "1.0.2"
 
 
 # Helper to convert #AARRGGBB to rgba(r,g,b,a) for QSS stylesheets
@@ -455,6 +455,113 @@ class ContentGlassCard(QWidget):
         highlight_pen.setBrush(QBrush(highlight_grad))
         p.setPen(highlight_pen)
         p.drawPath(path)
+        p.end()
+
+
+def is_startup_enabled() -> bool:
+    if platform.system() != "Windows":
+        return False
+    import winreg
+    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    app_name = "GoofyFocus"
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_READ)
+        value, _ = winreg.QueryValueEx(key, app_name)
+        winreg.CloseKey(key)
+        return True
+    except FileNotFoundError:
+        return False
+    except Exception:
+        return False
+
+
+def set_startup(enable: bool):
+    if platform.system() != "Windows":
+        return
+    import winreg
+    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    app_name = "GoofyFocus"
+    
+    if getattr(sys, 'frozen', False):
+        cmd = f'"{sys.executable}"'
+    else:
+        script_path = os.path.abspath(sys.argv[0])
+        cmd = f'"{sys.executable}" "{script_path}"'
+        
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+        if enable:
+            winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, cmd)
+            print(f"[startup] Enabled launch on startup: {cmd}")
+        else:
+            try:
+                winreg.DeleteValue(key, app_name)
+                print("[startup] Disabled launch on startup")
+            except FileNotFoundError:
+                pass
+        winreg.CloseKey(key)
+    except Exception as e:
+        print(f"[startup] Failed to edit startup registry: {e}")
+
+
+class ToggleSwitch(QAbstractButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(38, 20)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._checked = False
+        self._thumb_position = 2
+
+    def setChecked(self, checked: bool):
+        if self._checked != checked:
+            self._checked = checked
+            target = 20 if checked else 2
+            self.anim = QPropertyAnimation(self, b"thumb_position")
+            self.anim.setDuration(150)
+            self.anim.setStartValue(self._thumb_position)
+            self.anim.setEndValue(target)
+            self.anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+            self.anim.start()
+            self.update()
+
+    def isChecked(self) -> bool:
+        return self._checked
+
+    @pyqtProperty(int)
+    def thumb_position(self):
+        return self._thumb_position
+
+    @thumb_position.setter
+    def thumb_position(self, pos):
+        self._thumb_position = pos
+        self.update()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.setChecked(not self._checked)
+            self.clicked.emit(self._checked)
+        super().mouseReleaseEvent(event)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 10, 10)
+        
+        if self._checked:
+            track_color = QColor(ACCENT)
+        else:
+            track_color = QColor(255, 255, 255, 20)
+            
+        p.fillPath(path, QBrush(track_color))
+        
+        p.setPen(QPen(QColor(255, 255, 255, 30), 1.0))
+        p.drawPath(path)
+        
+        p.setBrush(QBrush(QColor("#ffffff")))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(QRectF(self._thumb_position, 2, 16, 16))
         p.end()
 
 
@@ -1207,6 +1314,12 @@ class MainWindow(QWidget):
         lay.addWidget(_setting_row("Sessions per cycle", "work blocks before long break", spc_w))
         lay.addWidget(_divider())
 
+        # Launch on startup
+        self._startup_toggle = ToggleSwitch()
+        self._startup_toggle.setChecked(is_startup_enabled())
+        lay.addWidget(_setting_row("Launch on startup", "start app automatically at login", self._startup_toggle))
+        lay.addWidget(_divider())
+
         # ── PERSONALISE ────────────────────────────────────────────────────────
         lay.addWidget(SectionHeader("PERSONALISE"))
 
@@ -1461,6 +1574,11 @@ class MainWindow(QWidget):
             if self._is_pro:
                 self.controller.sessions_per_cycle = self._spc_spin.value()
                 s.setValue("sessions_per_cycle", self._spc_spin.value())
+            
+            startup_enabled = self._startup_toggle.isChecked()
+            set_startup(startup_enabled)
+            s.setValue("launch_on_startup", startup_enabled)
+            
             self.circ.btn_pause.hide(); self.circ.btn_start.show(); self.circ.lbl_play_pause.setText("START")
             self._act_toggle.setText("Pause timer")
             self._set_status("saved ✓", GREEN)
@@ -1488,6 +1606,7 @@ class MainWindow(QWidget):
         if s.value("muted", False) == "true" or s.value("muted", False) is True:
             self._muted = True
             self.btn_global_mute.setIcon(QIcon(os.path.join(ASSETS_DIR, "icons", "volume-x.svg")))
+        self._startup_toggle.setChecked(is_startup_enabled())
         self._load_saved_login()
         self._apply_settings()
 
