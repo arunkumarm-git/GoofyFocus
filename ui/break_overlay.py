@@ -191,6 +191,7 @@ class BreakOverlayWindow(QWidget):
             Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         # Main horizontal layout to hold left stretching cards, center timer/GIF, and right stretching cards
         main_layout = QHBoxLayout(self)
@@ -294,10 +295,28 @@ class BreakOverlayWindow(QWidget):
         self.btn_mute.clicked.connect(self._toggle_mute)
         bottom.addWidget(self.btn_mute)
 
-        hint = QLabel("esc · skip")
-        hint.setFont(QFont("DM Mono", 11))
-        hint.setStyleSheet(f"color: {TEXT_LOW}; background: transparent;")
-        bottom.addWidget(hint)
+        self.btn_skip = QPushButton(" skip (esc)")
+        self.btn_skip.setIcon(QIcon(os.path.join(ASSETS_DIR, "icons", "skip-forward.svg")))
+        self.btn_skip.setIconSize(QSize(16, 16))
+        self.btn_skip.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_skip.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(255, 255, 255, 13);
+                color: {TEXT_MID};
+                border: 1px solid rgba(255, 255, 255, 31);
+                border-radius: 18px;
+                padding: 8px 24px;
+                font-size: 12px;
+                font-family: 'DM Sans';
+            }}
+            QPushButton:hover {{ 
+                background: rgba(255, 255, 255, 26); 
+                border-color: {ACCENT}; 
+                color: {TEXT_HI}; 
+            }}
+        """)
+        self.btn_skip.clicked.connect(self._skip_break)
+        bottom.addWidget(self.btn_skip)
 
         center_layout.addLayout(bottom)
         main_layout.addWidget(center_widget, 1, Qt.AlignmentFlag.AlignCenter)
@@ -356,17 +375,27 @@ class BreakOverlayWindow(QWidget):
             self.timer_label.setText(f"{m:02d}:{s:02d}")
         except Exception: pass
 
+    def _skip_break(self):
+        if getattr(self, '_skipped', False):
+            return
+        self._skipped = True
+        self._stop_sound()
+        try: self.controller.tick.disconnect(self._update_timer)
+        except Exception: pass
+        self.close()
+        QTimer.singleShot(100, self.controller.skip)
+
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:
-            self._stop_sound()
-            try: self.controller.tick.disconnect(self._update_timer)
-            except Exception: pass
-            self.close()
-            QTimer.singleShot(100, self.controller.skip)
+            self._skip_break()
 
     def closeEvent(self, event):
         self._stop_sound()
         try: self.controller.tick.disconnect(self._update_timer)
         except Exception: pass
         super().closeEvent(event)
+        if not getattr(self, '_skipped', False):
+            self._skipped = True
+            if self.controller.phase != "Work":
+                QTimer.singleShot(100, self.controller.skip)
 

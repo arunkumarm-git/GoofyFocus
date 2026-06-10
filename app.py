@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QFrame, QGraphicsDropShadowEffect, QStackedWidget,
     QScrollArea, QLineEdit, QGraphicsOpacityEffect, QAbstractButton
 )
-from PyQt6.QtCore import Qt, QTimer, QRectF, QSettings, QSize, QEvent, QPropertyAnimation, QEasingCurve, pyqtProperty, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, QRectF, QSettings, QSize, QEvent, QPropertyAnimation, QEasingCurve, pyqtProperty, pyqtSignal, QLockFile, QDir
 from PyQt6.QtGui import (
     QFont, QPainter, QColor, QPen, QBrush, QLinearGradient,
     QPainterPath, QIcon, QAction, QPixmap
@@ -1588,6 +1588,13 @@ class MainWindow(QWidget):
             return
         self._overlay_closing = True
         try:
+            try:
+                # Test if C++ object still exists to avoid RuntimeError
+                self.overlay.isVisible()
+            except RuntimeError:
+                self.overlay = None
+                return
+
             try: self.overlay.controller.tick.disconnect(self.overlay._update_timer)
             except Exception: pass
             _ov = self.overlay; self.overlay = None; _ov.close()
@@ -1676,6 +1683,9 @@ class MainWindow(QWidget):
                     muted=self._muted, gif_path=gif, sound_path=sound,
                 )
                 self.overlay.showFullScreen()
+                self.overlay.activateWindow()
+                self.overlay.raise_()
+                self.overlay.setFocus()
                 self.tray.showMessage(
                     "break time", f"{phase} — step away",
                     QSystemTrayIcon.MessageIcon.Information, 3000,
@@ -2135,8 +2145,18 @@ del "%~f0"
         except Exception as e:
             print("[blur] showEvent failed to apply blur:", e)
 
-    def _quit_app(self): self.tray.hide(); QApplication.quit()
-    def closeEvent(self, event): self.tray.hide(); event.accept(); QApplication.quit()
+    def _quit_app(self):
+        self._close_overlay_safely()
+        self.tray.hide()
+        QApplication.quit()
+        sys.exit(0)
+
+    def closeEvent(self, event):
+        self._close_overlay_safely()
+        self.tray.hide()
+        event.accept()
+        QApplication.quit()
+        sys.exit(0)
 
     # ── Paint ──────────────────────────────────────────────────────────────────
     def paintEvent(self, event):
@@ -2193,6 +2213,13 @@ def main():
     app.setOrganizationName("GoofyFocus")
     app.setApplicationName("GoofyFocus")
     app.setQuitOnLastWindowClosed(False)
+
+    # Single instance lock check
+    global _instance_lock
+    _instance_lock = QLockFile(os.path.join(QDir.tempPath(), "GoofyFocus.lock"))
+    if not _instance_lock.tryLock(100):
+        print("[startup] Goofy Focus is already running. Exiting.")
+        sys.exit(0)
     icon_path = os.path.join(ASSETS_DIR, "icon.png")
     if os.path.exists(icon_path):
         app.setWindowIcon(QIcon(icon_path))

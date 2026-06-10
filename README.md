@@ -4,6 +4,8 @@ Goofy Focus is a beautiful, minimalist desktop break reminder built with Python 
 * **Smart Phase Timer:** Automatically cycles between Work (25m), Short Breaks (5m), and Long Breaks (15m).
 * **Minimalist UI:** A sleek, transparent circular timer that stays out of your way.
 * **Immersive Breaks:** Full-screen overlays featuring curated local GIFs and sounds to help you step away from the screen.
+* **Interactive Break Controls:** Premium frosted glass buttons to mute sound or skip breaks instantly (with shortcut `Esc` key mapping).
+* **Single-Instance Protection:** Prevents duplicate running processes in the background, ensuring smooth execution and clean event mapping.
 * **Custom Break Flow:** Choose between Auto-cycling, Always Short, or Always Long breaks.
 * **System Tray Integration:** Runs quietly in the background with quick access to pause, skip, or mute.
 * **Google OAuth Login:** Secure session handling to personalize your experience.
