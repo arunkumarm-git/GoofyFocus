@@ -34,7 +34,7 @@ from pro.stats import StatsWindow
 from pro.messages import CustomMessagesWindow
 from pro.media import GifPackManager, SoundManagerWindow
 
-CURRENT_VERSION = "1.0.3"
+CURRENT_VERSION = "1.0.4"
 
 
 # Helper to convert #AARRGGBB to rgba(r,g,b,a) for QSS stylesheets

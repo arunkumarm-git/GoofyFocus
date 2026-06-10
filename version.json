@@ -1,5 +1,5 @@
 {
-  "latest_version": "1.0.3",
+  "latest_version": "1.0.4",
   "download_url": "https://arun-mass.itch.io/goofy-focus",
   "update_zip_url": "https://github.com/arunkumarm-git/GoofyFocus/archive/refs/heads/main.zip",
   "release_notes": "Added a toggle in settings to launch Goofy Focus automatically on system startup."
