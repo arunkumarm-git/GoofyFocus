@@ -155,7 +155,7 @@ class FeedbackWindow(QWidget):
                 "email":   self.user_email or "anonymous",
                 "rating":  self._rating,
                 "message": self.msg_box.toPlainText().strip(),
-            }).execute()
+            }, returning="minimal").execute()
 
             self.status_lbl.setText("✓ thanks for your feedback!")
             self.btn_submit.setText("sent!")

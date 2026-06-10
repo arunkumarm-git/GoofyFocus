@@ -1541,7 +1541,7 @@ class MainWindow(QWidget):
             from auth import get_supabase_client
             sb = get_supabase_client()
             if sb and sub != "guest":
-                sb.table("sessions").insert(payload).execute()
+                sb.table("sessions").insert(payload, returning="minimal").execute()
                 print("[session] synced to Supabase")
         except Exception as e:
             print(f"[session] cloud sync failed (expected if RLS/offline): {e}")
