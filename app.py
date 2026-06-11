@@ -1996,10 +1996,15 @@ class MainWindow(QWidget):
         def worker():
             import urllib.request
             import urllib.error
-            url = "https://raw.githubusercontent.com/arunkumarm-git/GoofyFocus/main/version.json"
+            import ssl
+            import random
+            # Add cache-buster to prevent GitHub raw caching
+            url = f"https://raw.githubusercontent.com/arunkumarm-git/GoofyFocus/main/version.json?nocache={random.randint(0, 100000)}"
             try:
+                # Use unverified context to prevent SSL handshake/certificate errors in frozen environments
+                context = ssl._create_unverified_context()
                 req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=5) as response:
+                with urllib.request.urlopen(req, timeout=5, context=context) as response:
                     data = json.loads(response.read().decode('utf-8'))
                     latest = data.get("latest_version")
                     download_url = data.get("download_url", "https://arun-mass.itch.io/goofy-focus")
@@ -2050,6 +2055,7 @@ class MainWindow(QWidget):
             import tempfile
             import shutil
             import subprocess
+            import ssl
             
             zip_url = getattr(self, '_update_zip_url', "https://github.com/arunkumarm-git/GoofyFocus/archive/refs/heads/main.zip")
             
@@ -2057,9 +2063,10 @@ class MainWindow(QWidget):
                 temp_dir = tempfile.mkdtemp()
                 zip_path = os.path.join(temp_dir, "update.zip")
                 
-                # Download update zip
+                # Download update zip using unverified context
+                context = ssl._create_unverified_context()
                 req = urllib.request.Request(zip_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=30) as response, open(zip_path, 'wb') as out_file:
+                with urllib.request.urlopen(req, timeout=30, context=context) as response, open(zip_path, 'wb') as out_file:
                     out_file.write(response.read())
                 
                 # Extract zip file
@@ -2086,14 +2093,21 @@ class MainWindow(QWidget):
                     script_path = os.path.abspath(sys.argv[0])
                     start_cmd = f'start "" "{sys.executable}" "{script_path}"'
                 
-                # Write Windows update batch script
+                exe_name = os.path.basename(sys.executable)
+                
+                # Write Windows update batch script (waits until application has fully closed before copying)
                 with open(batch_path, "w") as f:
                     f.write(f"""@echo off
 title Goofy Focus Updater
 echo Waiting for Goofy Focus to close...
-timeout /t 2 /nobreak > nul
+:wait_close
+tasklist /FI "IMAGENAME eq {exe_name}" 2>NUL | find /I /N "{exe_name}">NUL
+if "%ERRORLEVEL%"=="0" (
+    timeout /t 1 /nobreak > nul
+    goto wait_close
+)
 echo Copying new files to {current_dir}...
-xcopy /s /y /i "{src_dir}\\*" "{current_dir}\\"
+xcopy /s /y /i /e "{src_dir}\\*" "{current_dir}\\"
 echo Restarting Goofy Focus...
 cd /d "{current_dir}"
 {start_cmd}
