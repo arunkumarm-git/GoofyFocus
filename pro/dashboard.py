@@ -35,12 +35,34 @@ def generate_dashboard(user_info: dict):
 
     df = pd.DataFrame(data)
     # Convert completed_at to datetime and localize
-    df['completed_at'] = pd.to_datetime(df['completed_at'])
+    df['completed_at'] = pd.to_datetime(df['completed_at'], utc=True)
     df['local_time'] = df['completed_at'].dt.tz_convert(None) # Assuming naive local is fine for visualization
     df['date'] = df['local_time'].dt.date
     df['hour'] = df['local_time'].dt.hour
     df['day_name'] = df['local_time'].dt.day_name()
     df['duration_min'] = df['duration_secs'] / 60
+
+    # Ensure 'category' and 'task' columns exist in dataframe
+    if 'category' not in df.columns:
+        df['category'] = None
+    if 'task' not in df.columns:
+        df['task'] = None
+
+    # Helper function to resolve category (with fallback to parsing task bracket tag)
+    def resolve_category(row):
+        cat = row.get('category')
+        if pd.notna(cat) and cat:
+            return str(cat).strip()
+        task = row.get('task')
+        if pd.notna(task) and task:
+            task_str = str(task).strip()
+            if task_str.startswith('[') and ']' in task_str:
+                parsed_cat = task_str[1:task_str.index(']')]
+                if parsed_cat in ["Coding", "Design", "Writing", "Research", "Learning", "Planning", "Other"]:
+                    return parsed_cat
+        return "Uncategorized"
+
+    df['category'] = df.apply(resolve_category, axis=1)
 
     # 1. Daily Focus Bar Chart
     daily_focus = df[df['phase'] == 'Work'].groupby('date')['duration_min'].sum().reset_index()
@@ -68,7 +90,25 @@ def generate_dashboard(user_info: dict):
         font_color=TEXT_HI, title_font_family="DM Sans"
     )
 
-    # 3. Activity Heatmap (Hour vs Day)
+    # 3. Focus Time by Category Donut Chart (Work phase only)
+    work_df = df[df['phase'] == 'Work']
+    if not work_df.empty:
+        category_sum = work_df.groupby('category')['duration_min'].sum().reset_index()
+    else:
+        category_sum = pd.DataFrame(columns=['category', 'duration_min'])
+
+    fig_category = px.pie(
+        category_sum, values='duration_min', names='category',
+        hole=0.5, title="Focus Time by Category",
+        template="plotly_dark",
+        color_discrete_sequence=[ACCENT, ACCENT_2, "#818cf8", "#34d399", "#22d3ee", "#fbbf24", "#94a3b8"]
+    )
+    fig_category.update_layout(
+        plot_bgcolor=BG_0, paper_bgcolor=BG_0,
+        font_color=TEXT_HI, title_font_family="DM Sans"
+    )
+
+    # 4. Activity Heatmap (Hour vs Day)
     heatmap_data = df.groupby(['day_name', 'hour'])['duration_min'].sum().unstack(fill_value=0)
     # Reorder days
     days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -88,7 +128,7 @@ def generate_dashboard(user_info: dict):
         font_color=TEXT_HI, title_font_family="DM Sans"
     )
 
-    # 4. Streak Tracking Line Chart (Cumulative focus over time)
+    # 5. Streak Tracking Line Chart (Cumulative focus over time)
     df_sorted = df[df['phase'] == 'Work'].sort_values('local_time')
     df_sorted['cumulative_min'] = df_sorted['duration_min'].cumsum()
     
@@ -124,6 +164,7 @@ def generate_dashboard(user_info: dict):
             <div class="container">
                 <div class="chart">{fig_daily.to_html(full_html=False, include_plotlyjs='cdn')}</div>
                 <div class="chart">{fig_phase.to_html(full_html=False, include_plotlyjs=False)}</div>
+                <div class="chart">{fig_category.to_html(full_html=False, include_plotlyjs=False)}</div>
                 <div class="chart">{fig_heatmap.to_html(full_html=False, include_plotlyjs=False)}</div>
                 <div class="chart">{fig_streak.to_html(full_html=False, include_plotlyjs=False)}</div>
             </div>

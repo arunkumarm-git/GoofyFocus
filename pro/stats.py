@@ -183,6 +183,14 @@ class StatsWindow(QWidget):
         self.lbl_streak = self._add_stat_row(root, "Streak", "-- days")
         self.lbl_total  = self._add_stat_row(root, "Total focus", "-- hrs")
 
+        # Category Breakdown Widget (Pro only)
+        self.cat_widget = QWidget()
+        self.cat_widget.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.cat_lay = QVBoxLayout(self.cat_widget)
+        self.cat_lay.setContentsMargins(0, 8, 0, 8)
+        self.cat_lay.setSpacing(6)
+        root.addWidget(self.cat_widget)
+
         root.addStretch()
 
         # Dashboard Button (Pro)
@@ -241,6 +249,7 @@ class StatsWindow(QWidget):
         self.btn_export.setVisible(is_pro)
         self.status_lbl.setVisible(is_pro)
         self.promo_card.setVisible(not is_pro)
+        self.cat_widget.setVisible(is_pro)
 
     def _add_stat_row(self, layout, label, value):
         row = QHBoxLayout()
@@ -352,6 +361,104 @@ class StatsWindow(QWidget):
                         else: break
 
             self.lbl_streak.setText(f"{streak} days")
+            
+            # --- Category Breakdown Calculation ---
+            # Clear previous widgets in cat_lay
+            while self.cat_lay.count() > 0:
+                item = self.cat_lay.takeAt(0)
+                w = item.widget()
+                if w:
+                    w.deleteLater()
+
+            if self._is_pro:
+                # Group work sessions by category
+                cat_durations = defaultdict(int)
+                total_work_secs = 0
+                for r in data:
+                    if r.get("phase") == "Work":
+                        dur = r.get("duration_secs", 0)
+                        raw_cat = r.get("category")
+                        if raw_cat:
+                            category = str(raw_cat).strip()
+                        else:
+                            # Try parsing from task bracket tag
+                            task = r.get("task")
+                            if task:
+                                task_str = str(task).strip()
+                                if task_str.startswith('[') and ']' in task_str:
+                                    parsed_cat = task_str[1:task_str.index(']')]
+                                    if parsed_cat in ["Coding", "Design", "Writing", "Research", "Learning", "Planning", "Other"]:
+                                        category = parsed_cat
+                                    else:
+                                        category = "Uncategorized"
+                                else:
+                                    category = "Uncategorized"
+                            else:
+                                category = "Uncategorized"
+                        cat_durations[category] += dur
+                        total_work_secs += dur
+
+                # Add active elapsed seconds to category mapping if active timer is running for Work phase
+                if self._active_elapsed_secs > 0:
+                    current_cat = "Coding"
+                    if self.main_window and hasattr(self.main_window, 'task_category_combo'):
+                        current_cat = self.main_window.task_category_combo.currentText()
+                    cat_durations[current_cat] += self._active_elapsed_secs
+                    total_work_secs += self._active_elapsed_secs
+
+                if total_work_secs > 0:
+                    # Title for Category Section
+                    cat_header = QLabel("top categories")
+                    cat_header.setFont(QFont("DM Mono", 10, QFont.Weight.Bold))
+                    cat_header.setStyleSheet(f"color: {ACCENT_2}; background: transparent; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px;")
+                    self.cat_lay.addWidget(cat_header)
+
+                    from PyQt6.QtWidgets import QProgressBar
+                    # Sort categories by duration descending
+                    sorted_cats = sorted(cat_durations.items(), key=lambda x: x[1], reverse=True)
+                    # Show up to top 3 categories
+                    for cat_name, cat_secs in sorted_cats[:3]:
+                        pct = (cat_secs / total_work_secs) * 100
+                        cat_min = cat_secs // 60
+
+                        # Label Row
+                        row_w = QWidget()
+                        row_w.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+                        row_w_lay = QHBoxLayout(row_w)
+                        row_w_lay.setContentsMargins(0, 0, 0, 0)
+
+                        lbl_name = QLabel(cat_name)
+                        lbl_name.setFont(QFont("DM Sans", 10))
+                        lbl_name.setStyleSheet(f"color: {TEXT_MID}; background: transparent;")
+                        
+                        lbl_val = QLabel(f"{cat_min}m ({int(pct)}%)")
+                        lbl_val.setFont(QFont("DM Mono", 10))
+                        lbl_val.setStyleSheet(f"color: {TEXT_LOW}; background: transparent;")
+                        
+                        row_w_lay.addWidget(lbl_name)
+                        row_w_lay.addStretch()
+                        row_w_lay.addWidget(lbl_val)
+                        self.cat_lay.addWidget(row_w)
+
+                        # Progress Bar
+                        bar = QProgressBar()
+                        bar.setRange(0, 100)
+                        bar.setValue(int(pct))
+                        bar.setTextVisible(False)
+                        bar.setFixedHeight(5)
+                        bar.setStyleSheet(f"""
+                            QProgressBar {{
+                                background: rgba(255, 255, 255, 13);
+                                border: none;
+                                border-radius: 2.5px;
+                            }}
+                            QProgressBar::chunk {{
+                                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {ACCENT}, stop:1 {ACCENT_2});
+                                border-radius: 2.5px;
+                            }}
+                        """)
+                        self.cat_lay.addWidget(bar)
+
             if self._is_pro: self.status_lbl.setText(f"loaded {len(data)} local sessions")
             
         except Exception as e:

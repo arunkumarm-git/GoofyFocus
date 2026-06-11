@@ -1,6 +1,6 @@
 {
-  "latest_version": "1.0.4",
+  "latest_version": "1.0.5",
   "download_url": "https://arun-mass.itch.io/goofy-focus",
-  "update_zip_url": "https://github.com/arunkumarm-git/GoofyFocus/releases/download/v1.0.4/GoofyFocus_v1.0.4.zip",
-  "release_notes": "Fixed the updation bug"
+  "update_zip_url": "https://github.com/arunkumarm-git/GoofyFocus/releases/download/v1.0.5/GoofyFocus_v1.0.5.zip",
+  "release_notes": "Added task categorization, category tagging, stats breakdowns, and interactive category focus donut chart."
 }

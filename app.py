@@ -34,7 +34,7 @@ from pro.stats import StatsWindow
 from pro.messages import CustomMessagesWindow
 from pro.media import GifPackManager, SoundManagerWindow
 
-CURRENT_VERSION = "1.0.4"
+CURRENT_VERSION = "1.0.5"
 
 
 # Helper to convert #AARRGGBB to rgba(r,g,b,a) for QSS stylesheets
@@ -927,6 +927,25 @@ class MainWindow(QWidget):
         task_prefix = QLabel("Current task:")
         task_prefix.setStyleSheet("color: rgba(255,255,255,140); font-family: 'DM Sans'; font-size: 11px; background: transparent;")
         
+        s = QSettings("GoofyFocus", "GoofyFocus")
+        
+        # Category selection next to task
+        self.task_category_combo = QComboBox()
+        self.task_category_combo.addItems(["Coding", "Design", "Writing", "Research", "Learning", "Planning", "Other"])
+        self.task_category_combo.setFixedWidth(85)
+        self.task_category_combo.setStyleSheet(
+            f"QComboBox{{background:rgba(255,255,255,13);border:1px solid rgba(255,255,255,31);"
+            f"border-radius:8px;padding:4px 6px;color:{TEXT_HI};font-size:11px;"
+            "font-family:'DM Sans';font-weight:400;}"
+            "QComboBox:hover, QComboBox:focus{border-color:" + ACCENT + ";}"
+            "QComboBox::drop-down{border:none;width:14px;}"
+            f"QComboBox QAbstractItemView{{background:#120E15;border:1px solid rgba(255,255,255,31);"
+            f"color:{TEXT_HI};selection-background-color:rgba(255,255,255,20);font-size:11px;border-radius:6px;}}"
+        )
+        saved_cat = s.value("current_category", "Coding")
+        self.task_category_combo.setCurrentText(saved_cat)
+        self.task_category_combo.currentTextChanged.connect(lambda c: QSettings("GoofyFocus", "GoofyFocus").setValue("current_category", c))
+
         self.task_input = QLineEdit("Studying about life...")
         self.task_input.setFixedWidth(130)
         self.task_input.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
@@ -945,13 +964,12 @@ class MainWindow(QWidget):
                 background: rgba(255, 255, 255, 20);
             }}
         """)
-        s = QSettings("GoofyFocus", "GoofyFocus")
         saved_task = s.value("current_task", "Studying about life...")
         if saved_task == "Design UI Mockups":
             saved_task = "Studying about life..."
             s.setValue("current_task", saved_task)
         self.task_input.setText(saved_task)
-        self.task_input.textChanged.connect(lambda t: QSettings("GoofyFocus", "GoofyFocus").setValue("current_task", t))
+        self.task_input.textChanged.connect(lambda t: s.setValue("current_task", t))
         
         task_edit_icon = QLabel()
         task_edit_icon.setPixmap(QIcon(os.path.join(ASSETS_DIR, "icons", "edit.svg")).pixmap(10, 10))
@@ -961,6 +979,7 @@ class MainWindow(QWidget):
         task_edit_icon.setGraphicsEffect(op_edit)
         
         task_row.addWidget(task_prefix)
+        task_row.addWidget(self.task_category_combo)
         task_row.addWidget(self.task_input)
         task_row.addWidget(task_edit_icon)
         task_row.addStretch()
@@ -1514,11 +1533,18 @@ class MainWindow(QWidget):
     def _save_session(self, duration_secs: int, phase: str):
         sub = self._user_info.get("id", "guest")
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        
+        # Get task name and category
+        task_name = self.task_input.text().strip()
+        category_name = self.task_category_combo.currentText()
+        
         payload = {
             "google_sub": sub, 
             "duration_secs": duration_secs, 
             "phase": phase,
-            "completed_at": now_iso
+            "completed_at": now_iso,
+            "task": task_name,
+            "category": category_name
         }
         
         # 1. Save Locally (Primary)
@@ -1541,7 +1567,14 @@ class MainWindow(QWidget):
             from auth import get_supabase_client
             sb = get_supabase_client()
             if sb and sub != "guest":
-                sb.table("sessions").insert(payload, returning="minimal").execute()
+                # Prune task and category for cloud sync since they don't exist in Supabase schema
+                cloud_payload = {
+                    "google_sub": sub,
+                    "duration_secs": duration_secs,
+                    "phase": phase,
+                    "completed_at": now_iso
+                }
+                sb.table("sessions").insert(cloud_payload, returning="minimal").execute()
                 print("[session] synced to Supabase")
         except Exception as e:
             print(f"[session] cloud sync failed (expected if RLS/offline): {e}")
