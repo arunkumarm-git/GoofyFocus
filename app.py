@@ -1244,8 +1244,8 @@ class MainWindow(QWidget):
         pills_row.setSpacing(10)
         pills_row.addStretch()
         
-        btn_pill_short = QPushButton("Break (5:00)")
-        btn_pill_long = QPushButton("Long Break")
+        self.btn_pill_short = QPushButton("Break (5:00)")
+        self.btn_pill_long = QPushButton("Long Break")
         btn_pill_end = QPushButton("End Session")
         
         pill_style = """
@@ -1269,13 +1269,13 @@ class MainWindow(QWidget):
                 background: rgba(255, 255, 255, 10);
             }
         """
-        for b in (btn_pill_short, btn_pill_long, btn_pill_end):
+        for b in (self.btn_pill_short, self.btn_pill_long, btn_pill_end):
             b.setStyleSheet(pill_style)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             pills_row.addWidget(b)
             
-        btn_pill_short.clicked.connect(lambda: self._set_phase_and_start("Short Break"))
-        btn_pill_long.clicked.connect(lambda: self._set_phase_and_start("Long Break"))
+        self.btn_pill_short.clicked.connect(lambda: self._set_phase_and_start("Short Break"))
+        self.btn_pill_long.clicked.connect(lambda: self._set_phase_and_start("Long Break"))
         btn_pill_end.clicked.connect(self._ui_reset)
         
         pills_row.addStretch()
@@ -1938,6 +1938,16 @@ class MainWindow(QWidget):
         self._ui_pause() if self.controller.is_running else self._ui_start()
 
     # ── Settings persistence ───────────────────────────────────────────────────
+    def _update_break_btns_text(self):
+        if hasattr(self, 'btn_pill_short') and 'short' in self._dur_spins:
+            short_secs = self._dur_spins["short"].value_secs()
+            m, s = short_secs // 60, short_secs % 60
+            self.btn_pill_short.setText(f"Break ({m}:{s:02d})")
+        if hasattr(self, 'btn_pill_long') and 'long' in self._dur_spins:
+            long_secs = self._dur_spins["long"].value_secs()
+            m, s = long_secs // 60, long_secs % 60
+            self.btn_pill_long.setText(f"Long Break ({m}:{s:02d})")
+
     def _apply_settings(self):
         self._close_overlay_safely()
         try:
@@ -1967,6 +1977,7 @@ class MainWindow(QWidget):
             s.setValue("long_secs",  self._dur_spins["long"].value_secs())
             s.setValue("break_flow", self._flow_combo.currentIndex())
             s.setValue("muted",      self._muted)
+            self._update_break_btns_text()
         except Exception:
             self._set_status("error saving", "rgba(248,113,113,160)")
 

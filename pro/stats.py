@@ -5,7 +5,7 @@ import os
 import json
 import threading
 from collections import defaultdict
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog, QApplication, QGraphicsDropShadowEffect
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QFileDialog, QApplication, QGraphicsDropShadowEffect
 from PyQt6.QtCore import Qt, QRectF, QTimer
 from PyQt6.QtGui import QPainter, QColor, QPainterPath, QLinearGradient, QBrush, QPen, QFont
 from auth import get_supabase_client
@@ -121,6 +121,63 @@ class PromoAdCard(QWidget):
         p.drawPath(path)
         p.end()
 
+
+class StatCard(QWidget):
+    """A premium, modern glassmorphic stats card for displaying focus metrics."""
+    def __init__(self, title: str, value: str, icon_str: str = "", parent=None):
+        super().__init__(parent)
+        self.title = title
+        self.value = value
+        self.icon_str = icon_str
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self._build_ui()
+
+    def _build_ui(self):
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(14, 12, 14, 12)
+        lay.setSpacing(4)
+        
+        # Title and optional icon
+        header = QHBoxLayout()
+        header.setSpacing(6)
+        
+        if self.icon_str:
+            self.icon_lbl = QLabel(self.icon_str)
+            self.icon_lbl.setFont(QFont("Segoe UI Emoji", 11))
+            self.icon_lbl.setStyleSheet("background: transparent;")
+            header.addWidget(self.icon_lbl)
+            
+        self.title_lbl = QLabel(self.title)
+        self.title_lbl.setFont(QFont("DM Sans", 9, QFont.Weight.Medium))
+        self.title_lbl.setStyleSheet(f"color: {TEXT_LOW}; background: transparent; text-transform: uppercase; letter-spacing: 0.5px;")
+        header.addWidget(self.title_lbl)
+        header.addStretch()
+        lay.addLayout(header)
+        
+        # Value
+        self.val_lbl = QLabel(self.value)
+        self.val_lbl.setFont(QFont("DM Mono", 16, QFont.Weight.Bold))
+        self.val_lbl.setStyleSheet(f"color: {TEXT_HI}; background: transparent;")
+        lay.addWidget(self.val_lbl)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 12, 12)
+        
+        # Very premium glass card look
+        p.fillPath(path, QBrush(QColor(255, 255, 255, 10)))
+        
+        # Draw gradient border
+        border_grad = QLinearGradient(0, 0, self.width(), self.height())
+        border_grad.setColorAt(0, QColor(255, 255, 255, 20))
+        border_grad.setColorAt(1, QColor(255, 255, 255, 5))
+        p.setPen(QPen(border_grad, 1.0))
+        p.drawPath(path)
+        p.end()
+
+
 class StatsWindow(QWidget):
     def __init__(self, user_info: dict, is_pro: bool, active_elapsed_secs: int = 0, is_embedded: bool = False, parent=None):
         super().__init__(parent)
@@ -144,6 +201,11 @@ class StatsWindow(QWidget):
         if is_pro:
             self._load_stats()
 
+    def get_user_info(self) -> dict:
+        if self.main_window and hasattr(self.main_window, '_user_info'):
+            return self.main_window._user_info
+        return self._user_info or {}
+
     def _build_ui(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 20, 24, 20)
@@ -166,11 +228,27 @@ class StatsWindow(QWidget):
             tb.addWidget(close_btn)
             root.addLayout(tb)
 
-        # Stats Grid
-        self.lbl_today  = self._add_stat_row(root, "Today", "-- min")
-        self.lbl_week   = self._add_stat_row(root, "This week", "-- sessions")
-        self.lbl_streak = self._add_stat_row(root, "Streak", "-- days")
-        self.lbl_total  = self._add_stat_row(root, "Total focus", "-- hrs")
+        # Stats Grid (2x2 cards)
+        self.stats_grid = QGridLayout()
+        self.stats_grid.setSpacing(10)
+        self.stats_grid.setContentsMargins(0, 0, 0, 0)
+        
+        self.card_today  = StatCard("Today", "-- min", "📅", self)
+        self.card_week   = StatCard("This week", "-- sessions", "⚡", self)
+        self.card_streak = StatCard("Streak", "-- days", "🔥", self)
+        self.card_total  = StatCard("Total focus", "-- hrs", "🏆", self)
+        
+        self.stats_grid.addWidget(self.card_today, 0, 0)
+        self.stats_grid.addWidget(self.card_week, 0, 1)
+        self.stats_grid.addWidget(self.card_streak, 1, 0)
+        self.stats_grid.addWidget(self.card_total, 1, 1)
+        
+        root.addLayout(self.stats_grid)
+
+        self.lbl_today  = self.card_today.val_lbl
+        self.lbl_week   = self.card_week.val_lbl
+        self.lbl_streak = self.card_streak.val_lbl
+        self.lbl_total  = self.card_total.val_lbl
 
         # Category Breakdown Widget (Pro only)
         self.cat_widget = QWidget()
@@ -270,7 +348,8 @@ class StatsWindow(QWidget):
             from assets import USER_DATA_DIR
             local_db = os.path.join(USER_DATA_DIR, "sessions.json")
             data = []
-            current_sub = self._user_info.get("id", "guest") if self._user_info else "guest"
+            user_info = self.get_user_info()
+            current_sub = user_info.get("id", "guest") if user_info else "guest"
             if os.path.exists(local_db):
                 with open(local_db, "r") as f:
                     all_data = json.load(f)
@@ -281,7 +360,7 @@ class StatsWindow(QWidget):
                 print(f"[stats] local db not found at {local_db}, trying cloud...")
                 sb = get_supabase_client()
                 if sb:
-                    sub = self._user_info.get("id")
+                    sub = user_info.get("id")
                     if sub:
                         res = sb.table("sessions").select("*").eq("google_sub", sub).execute()
                         data = res.data
@@ -466,7 +545,8 @@ class StatsWindow(QWidget):
             from assets import USER_DATA_DIR
             local_db = os.path.join(USER_DATA_DIR, "sessions.json")
             rows = []
-            current_sub = self._user_info.get("id", "guest") if self._user_info else "guest"
+            user_info = self.get_user_info()
+            current_sub = user_info.get("id", "guest") if user_info else "guest"
             if os.path.exists(local_db):
                 with open(local_db, "r") as f:
                     all_rows = json.load(f)
@@ -475,7 +555,7 @@ class StatsWindow(QWidget):
                 # 2. Fallback to Supabase
                 sb = get_supabase_client()
                 if sb:
-                    sub = self._user_info.get("id")
+                    sub = user_info.get("id")
                     if sub:
                         res = sb.table("sessions").select("completed_at, duration_secs, phase").eq("google_sub", sub).order("completed_at", desc=True).execute()
                         rows = res.data
@@ -502,7 +582,7 @@ class StatsWindow(QWidget):
     def _show_interactive_dashboard(self):
         self.btn_dashboard.setText("generating...")
         QApplication.processEvents()
-        success = generate_dashboard(self._user_info)
+        success = generate_dashboard(self.get_user_info())
         if success:
             self.status_lbl.setText("✓ dashboard opened in browser")
         else:
