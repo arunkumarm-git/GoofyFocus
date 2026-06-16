@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoofyFocus — Beautiful Minimalist Break Reminder</title>
+    <meta name="description" content="Maintain focus and build healthy screen habits with GoofyFocus, a sleek frosted-glass break reminder for Windows. Custom intervals, full-screen breaks, and interactive companion.">
+    
+    <!-- Modern Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="images/icon.png">
+</head>
+<body>
+    <!-- Ambient Background Gradients -->
+    <div class="ambient-glow glow-1"></div>
+    <div class="ambient-glow glow-2"></div>
+    <div class="noise-overlay"></div>
+
+    <!-- Navigation Header -->
+    <header class="navbar">
+        <div class="nav-container">
+            <a href="#" class="brand" id="nav-brand">
+                <img src="images/icon.png" alt="GoofyFocus Logo" class="brand-logo">
+                <span class="brand-name">GoofyFocus</span>
+            </a>
+            <nav class="nav-menu">
+                <a href="#features" class="nav-link">Features</a>
+                <a href="#demo" class="nav-link">Interactive Demo</a>
+                <a href="#tour" class="nav-link">App Tour</a>
+                <a href="#download" class="btn btn-secondary btn-sm" id="btn-nav-download">Download</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="container">
+            <div class="hero-content">
+                <div class="badge-container">
+                    <span class="hero-badge">✦ Version 1.0.7 Now Available</span>
+                </div>
+                <h1 class="hero-title">Break the screen.<br>Keep the <span class="gradient-text">focus</span>.</h1>
+                <p class="hero-subtitle">
+                    A beautiful, minimalist desktop break reminder built to enforce healthy habits. Elegant glassmorphic design, immersive fullscreen overlays, and a procedural mascot companion.
+                </p>
+                <div class="hero-actions">
+                    <a href="#download" class="btn btn-primary btn-lg" id="hero-btn-download">Download Free</a>
+                    <a href="https://github.com/arunkumarm-git/GoofyFocus" target="_blank" rel="noopener" class="btn btn-ghost btn-lg" id="hero-btn-github">
+                        <svg class="icon-svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                            <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+                        </svg>
+                        Source Code
+                    </a>
+                </div>
+            </div>
+
+            <!-- Embedded Live Glassmorphic App Mockup -->
+            <div class="hero-mockup-wrapper">
+                <div class="app-window-mockup">
+                    <div class="app-titlebar">
+                        <div class="app-title-drag">
+                            <img src="images/icon.png" alt="Window Icon" class="titlebar-icon">
+                            <span>Goofy Focus</span>
+                        </div>
+                        <div class="window-controls">
+                            <button class="win-btn win-min" aria-label="Minimize">🗕</button>
+                            <button class="win-btn win-max" aria-label="Maximize">🗖</button>
+                            <button class="win-btn win-close" aria-label="Close">✕</button>
+                        </div>
+                    </div>
+                    
+                    <div class="app-body">
+                        <!-- App Sidebar Mockup -->
+                        <aside class="app-sidebar">
+                            <div class="mascot-container">
+                                <!-- CSS Animated Cute Mascot -->
+                                <div class="mascot-avatar" id="mascot-avatar">
+                                    <div class="mascot-ear left"></div>
+                                    <div class="mascot-ear right"></div>
+                                    <div class="mascot-face">
+                                        <div class="mascot-eye left"><div class="mascot-pupil"></div></div>
+                                        <div class="mascot-eye right"><div class="mascot-pupil"></div></div>
+                                        <div class="mascot-mouth"></div>
+                                        <div class="mascot-blush left"></div>
+                                        <div class="mascot-blush right"></div>
+                                    </div>
+                                    <div class="mascot-tear" id="mascot-tear"></div>
+                                </div>
+                                <div class="speech-bubble" id="mascot-speech-bubble">
+                                    Hover me! ⚡
+                                </div>
+                            </div>
+                            
+                            <nav class="app-nav">
+                                <button class="app-nav-btn active" data-tab="sessions" aria-label="Sessions Tab">
+                                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                    <span class="tooltip">Sessions</span>
+                                </button>
+                                <button class="app-nav-btn" data-tab="analytics" aria-label="Analytics Tab">
+                                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
+                                    <span class="tooltip">Analytics</span>
+                                </button>
+                                <button class="app-nav-btn" data-tab="settings" aria-label="Settings Tab">
+                                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                                    <span class="tooltip">Settings</span>
+                                </button>
+                                <button class="app-nav-btn" data-tab="account" aria-label="Account Tab">
+                                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                    <span class="tooltip">Account</span>
+                                </button>
+                            </nav>
+                            
+                            <div class="sidebar-bottom">
+                                <button class="mute-btn" id="app-mute-btn" aria-label="Mute sound">
+                                    <svg class="mute-icon" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                                </button>
+                                <div class="avatar-circle">A</div>
+                            </div>
+                        </aside>
+                        
+                        <!-- App Content Mockup -->
+                        <main class="app-content-area">
+                            <div class="screenshot-display-container">
+                                <img src="images/main_page_without_signin.png" alt="Sessions Screenshot" class="app-screenshot active" id="ss-sessions">
+                                <img src="images/analytics_page.png" alt="Analytics Screenshot" class="app-screenshot" id="ss-analytics">
+                                <img src="images/setting_page.png" alt="Settings Screenshot" class="app-screenshot" id="ss-settings">
+                                <img src="images/account_page.png" alt="Account Screenshot" class="app-screenshot" id="ss-account">
+                                <img src="images/break_screen.png" alt="Break Screen Screenshot" class="app-screenshot" id="ss-break">
+                            </div>
+                            
+                            <!-- Toggle layout features overlay in mockup -->
+                            <div class="mockup-info-overlay">
+                                <span class="mockup-label" id="mockup-current-view">Sessions View</span>
+                                <div class="mockup-toggles">
+                                    <button class="mockup-toggle-btn active" id="btn-toggle-normal">Standard UI</button>
+                                    <button class="mockup-toggle-btn" id="btn-toggle-break">Show Break Overlay</button>
+                                </div>
+                            </div>
+                        </main>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- App Screenshot Slideshow Carousel -->
+    <section class="gallery-section">
+        <div class="container">
+            <h2 class="section-title">Visual Tour of <span class="gradient-text">GoofyFocus</span></h2>
+            <p class="section-subtitle">Take a closer look at the rich styling, widgets, and user flows.</p>
+            
+            <div class="carousel-container">
+                <div class="carousel-track-wrapper">
+                    <div class="carousel-track" id="carousel-track">
+                        <div class="carousel-slide">
+                            <img src="images/main_page_without_signin.png" alt="Main Timer View">
+                            <div class="slide-caption">
+                                <h3>Sessions View</h3>
+                                <p>Sleek, transparent circular timer that coordinates work intervals and break phases quiet in your workflow.</p>
+                            </div>
+                        </div>
+                        <div class="carousel-slide">
+                            <img src="images/analytics_page.png" alt="Analytics Dashboard">
+                            <div class="slide-caption">
+                                <h3>Focus Analytics</h3>
+                                <p>Beautiful analytics mapping focus sessions across productivity categories like Coding, Design, and Planning.</p>
+                            </div>
+                        </div>
+                        <div class="carousel-slide">
+                            <img src="images/setting_page.png" alt="Settings Panel">
+                            <div class="slide-caption">
+                                <h3>Deep Customization</h3>
+                                <p>Control cycle rules, timings, custom alert noises, and window behaviors to suit your productivity style.</p>
+                            </div>
+                        </div>
+                        <div class="carousel-slide">
+                            <img src="images/account_page.png" alt="Account and Sync">
+                            <div class="slide-caption">
+                                <h3>Sync & Profile</h3>
+                                <p>Authenticate with Google to back up focus sessions and sync dashboards across your workstations.</p>
+                            </div>
+                        </div>
+                        <div class="carousel-slide">
+                            <img src="images/break_screen.png" alt="Fullscreen Break overlay">
+                            <div class="slide-caption">
+                                <h3>Immersive Fullscreen Breaks</h3>
+                                <p>Forced fullscreen overlay featuring comforting bokeh gradients, custom local GIFs, and audio triggers.</p>
+                            </div>
+                        </div>
+                        <div class="carousel-slide">
+                            <img src="images/ask_to_signin_page.png" alt="Google Login Dialog">
+                            <div class="slide-caption">
+                                <h3>Seamless Google Login</h3>
+                                <p>Simple OAuth sign-in dialog integrated natively in the PyQt6 desktop layout.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Carousel Navigations -->
+                <button class="carousel-nav prev" id="carousel-prev" aria-label="Previous Slide">‹</button>
+                <button class="carousel-nav next" id="carousel-next" aria-label="Next Slide">›</button>
+                
+                <!-- Dots indicators -->
+                <div class="carousel-dots" id="carousel-dots">
+                    <button class="carousel-dot active" data-slide="0" aria-label="Slide 1"></button>
+                    <button class="carousel-dot" data-slide="1" aria-label="Slide 2"></button>
+                    <button class="carousel-dot" data-slide="2" aria-label="Slide 3"></button>
+                    <button class="carousel-dot" data-slide="3" aria-label="Slide 4"></button>
+                    <button class="carousel-dot" data-slide="4" aria-label="Slide 5"></button>
+                    <button class="carousel-dot" data-slide="5" aria-label="Slide 6"></button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Key Features Grid -->
+    <section class="features-section" id="features">
+        <div class="container">
+            <h2 class="section-title">Engineered for <span class="gradient-text">Healthy Habits</span></h2>
+            <p class="section-subtitle">Designed to help you establish a sustainable routine without introducing user interface friction.</p>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    </div>
+                    <h3 class="feature-title">Smart Phase Timer</h3>
+                    <p class="feature-desc">Automatically cycles between focused Work blocks (25m), Short Rest Breaks (5m), and restoring Long Breaks (15m) to maintain peak cognitive stamina.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                    </div>
+                    <h3 class="feature-title">Immersive Breaks</h3>
+                    <p class="feature-desc">Enforces breaks with beautiful fullscreen canvas screens loaded with randomized local GIF themes and soothing white noise loops.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
+                    </div>
+                    <h3 class="feature-title">Jakob's Law UX</h3>
+                    <p class="feature-desc">Conforms directly to standard desktop guidelines: title bar drag zones, closing hides to system tray, double-click maximization, and quick tooltips.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
+                    </div>
+                    <h3 class="feature-title">Focus Analytics</h3>
+                    <p class="feature-desc">Interactive dashboard tracks session duration, categories, and success rates. Visualize coding, designing, and research targets side-by-side.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>
+                    </div>
+                    <h3 class="feature-title">Google OAuth Sync</h3>
+                    <p class="feature-desc">Secure, lightweight credentials validation to store focus metrics, custom timers, and profile details on cloud servers.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    </div>
+                    <h3 class="feature-title">Single Instance Shield</h3>
+                    <p class="feature-desc">Guarantees that only one lightweight timer process runs on your CPU, preventing event loops or duplicate window configurations.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Interactive Timer Demonstration Section -->
+    <section class="demo-section" id="demo">
+        <div class="container">
+            <div class="demo-grid">
+                <div class="demo-details">
+                    <h2 class="demo-title">Interact with the <span class="gradient-text">Live Timer</span></h2>
+                    <p class="demo-subtitle">Experience the Pomodoro cycle behavior right inside your browser. Control phases and watch the circular progress respond dynamically.</p>
+                    
+                    <div class="demo-features-list">
+                        <div class="demo-feature-item" id="dfi-work">
+                            <span class="phase-indicator work"></span>
+                            <div>
+                                <strong>Work Phase (25m)</strong>
+                                <p>Deep concentration block. Mutes notifications and prompts focus.</p>
+                            </div>
+                        </div>
+                        <div class="demo-feature-item" id="dfi-break">
+                            <span class="phase-indicator break"></span>
+                            <div>
+                                <strong>Break Phase (5m)</strong>
+                                <p>Rest your eyes. Stand up, stretch, and disconnect.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="demo-tips">
+                        <span class="tip-icon">💡</span>
+                        <p class="tip-text">When the work timer hits zero, the app prompts you to launch a fullscreen break to save you from screen fatigue.</p>
+                    </div>
+                </div>
+                
+                <div class="demo-display">
+                    <div class="glass-timer-card">
+                        <!-- Circular Progress Widget -->
+                        <div class="circular-timer-wrapper">
+                            <svg class="timer-svg" viewBox="0 0 200 200">
+                                <circle class="timer-track" cx="100" cy="100" r="90"></circle>
+                                <circle class="timer-progress" id="js-timer-progress" cx="100" cy="100" r="90"></circle>
+                            </svg>
+                            <div class="timer-info">
+                                <div class="timer-label" id="js-timer-label">WORK</div>
+                                <div class="timer-time" id="js-timer-time">25:00</div>
+                                <div class="timer-sub" id="js-timer-task">Task: Coding</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Control Buttons -->
+                        <div class="timer-controls">
+                            <button class="ctrl-btn" id="btn-timer-reset" aria-label="Reset Timer">
+                                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                            </button>
+                            <button class="ctrl-btn ctrl-btn-primary" id="btn-timer-play" aria-label="Play or Pause Timer">
+                                <svg id="play-pause-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                            </button>
+                            <button class="ctrl-btn" id="btn-timer-skip" aria-label="Skip Phase">
+                                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Support & Donation CTA Section -->
+    <section class="support-section">
+        <div class="container">
+            <div class="support-card">
+                <div class="support-content">
+                    <h2 class="support-title">GoofyFocus is 100% Free & Source-Available</h2>
+                    <p class="support-text">
+                        No subscriptions, no hidden features locked behind paywalls, and absolutely no data tracking. GoofyFocus is built with care for developer wellness. If it helps you live a healthier digital life, please consider supporting the project!
+                    </p>
+                    <div class="support-actions">
+                        <a href="https://arun-mass.itch.io/goofy-focus" target="_blank" rel="noopener" class="btn btn-primary btn-lg" id="btn-donate-kofi">
+                            Support on itch.io 💖
+                        </a>
+                        <a href="#download" class="btn btn-ghost btn-lg" id="btn-donate-get">Get the App</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Download Section -->
+    <section class="download-section" id="download">
+        <div class="container">
+            <div class="download-box">
+                <h2 class="download-title">Get Started Today</h2>
+                <p class="download-text">Download GoofyFocus for Windows. Install standard executable or check release builds on GitHub.</p>
+                
+                <div class="download-grid">
+                    <div class="download-option-card">
+                        <span class="platform-icon">🪟</span>
+                        <h3>Windows Installer</h3>
+                        <p class="opt-desc">Easiest setup. Standard installer wraps core dependencies and configures system startup registry entries.</p>
+                        <a href="https://arun-mass.itch.io/goofy-focus" target="_blank" rel="noopener" class="btn btn-primary" id="btn-dl-installer">Download on itch.io</a>
+                    </div>
+
+                    <div class="download-option-card">
+                        <span class="platform-icon">📦</span>
+                        <h3>GitHub Release (v1.0.7)</h3>
+                        <p class="opt-desc">Pre-compiled zip file containing binaries. Simply unzip and run GoofyFocus.exe instantly.</p>
+                        <a href="https://github.com/arunkumarm-git/GoofyFocus/releases/download/v1.0.7/GoofyFocus_v1.0.7.zip" class="btn btn-ghost" id="btn-dl-zip">Direct Zip Download</a>
+                    </div>
+                </div>
+
+                <div class="download-meta">
+                    <span>System Requirements: Windows 10 / 11 (64-bit)</span>
+                    <span class="separator">•</span>
+                    <span>License: Source-Available Proprietary</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-info">
+                    <div class="brand">
+                        <img src="images/icon.png" alt="GoofyFocus Logo" class="brand-logo">
+                        <span class="brand-name">GoofyFocus</span>
+                    </div>
+                    <p class="footer-desc">A beautiful desktop break reminder enforcing scheduled screen resets using frosted glass layouts and immersive break overrides.</p>
+                </div>
+                
+                <div class="footer-links-group">
+                    <h4>Project</h4>
+                    <a href="https://github.com/arunkumarm-git/GoofyFocus" target="_blank" rel="noopener">GitHub Repository</a>
+                    <a href="https://github.com/arunkumarm-git/GoofyFocus/issues" target="_blank" rel="noopener">Issue Tracker</a>
+                    <a href="https://arun-mass.itch.io/goofy-focus" target="_blank" rel="noopener">itch.io Store Page</a>
+                </div>
+
+                <div class="footer-links-group">
+                    <h4>License & Legal</h4>
+                    <p class="legal-text">Copyright © 2026 Arun Kumar M. All Rights Reserved.</p>
+                    <p class="legal-text">GoofyFocus is <strong>source-available</strong>, not open-source. For commercial or derivative licensing agreements, contact the developer.</p>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; 2026 Arun Kumar M. Built for developers, designers, and screen-bound creators.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Interactive logic -->
+    <script src="script.js"></script>
+</body>
+</html>
