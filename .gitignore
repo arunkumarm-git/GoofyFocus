@@ -1,0 +1,21 @@
+# Python and build artifacts (not part of the website)
+.env
+.secrets/
+.venv/
+__pycache__/
+build/
+dist/
+
+# Python source files (only website files belong in gh-pages)
+pro/
+ui/
+*.py
+*.spec
+*.iss
+requirements.txt
+version.json
+LICENSE
+
+# OS artifacts
+.DS_Store
+Thumbs.db
