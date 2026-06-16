@@ -2463,8 +2463,15 @@ class MainWindow(QWidget):
                 # Download update zip using unverified context
                 context = ssl._create_unverified_context()
                 req = urllib.request.Request(zip_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=30, context=context) as response, open(zip_path, 'wb') as out_file:
-                    out_file.write(response.read())
+                try:
+                    with urllib.request.urlopen(req, timeout=30, context=context) as response, open(zip_path, 'wb') as out_file:
+                        out_file.write(response.read())
+                except Exception as download_err:
+                    print(f"[auto_update] Primary download failed: {download_err}. Trying fallback to main branch zip...")
+                    fallback_url = "https://github.com/arunkumarm-git/GoofyFocus/archive/refs/heads/main.zip"
+                    req_fallback = urllib.request.Request(fallback_url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req_fallback, timeout=30, context=context) as response, open(zip_path, 'wb') as out_file:
+                        out_file.write(response.read())
                 
                 # Extract zip file
                 extract_dir = os.path.join(temp_dir, "extract")
