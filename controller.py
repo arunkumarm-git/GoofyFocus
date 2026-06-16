@@ -87,7 +87,8 @@ class TimerController(QObject):
         self.short_break_secs = short_s
         self.long_break_secs  = long_s
         self.break_flow       = flow
-        self.reset()
+        if not self.is_running:
+            self.set_phase(self.phase)
 
     def progress(self) -> float:
         if self.total_secs == 0: return 0.0

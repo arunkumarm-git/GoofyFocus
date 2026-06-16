@@ -4,7 +4,7 @@
 
 [Setup]
 AppName=Goofy Focus
-AppVersion=1.0.5
+AppVersion=1.0.6
 AppPublisher=Arun Kumar M
 DefaultDirName={localappdata}\GoofyFocus
 DefaultGroupName=Goofy Focus

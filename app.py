@@ -28,13 +28,14 @@ from auth import perform_login, load_cached_user, logout_user, save_cached_user
 from ui.widgets import CircularTimer, DurationSpin
 from ui.break_overlay import BreakOverlayWindow
 from ui.feedback import FeedbackWindow
+from ui.login import LoginDialog
 
 from pro.gate import UpgradeDialog
 from pro.stats import StatsWindow
 from pro.messages import CustomMessagesWindow
 from pro.media import GifPackManager, SoundManagerWindow
 
-CURRENT_VERSION = "1.0.5"
+CURRENT_VERSION = "1.0.6"
 
 
 # Helper to convert #AARRGGBB to rgba(r,g,b,a) for QSS stylesheets
@@ -676,6 +677,221 @@ class ProSpinBox(QSpinBox):
             super().keyPressEvent(event)
 
 
+# ── Speech Bubble (Mascot companion bubble) ─────────────────────────────────────
+class SpeechBubble(QWidget):
+    def __init__(self, parent=None):
+        # Pass None to super() to ensure it is always a top-level screen window independent of parent coordinate system
+        super().__init__(None)
+        self.main_window = parent
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.Tool |
+            Qt.WindowType.WindowDoesNotAcceptFocus
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        
+        # Increase size slightly to fit the shadow drawing area
+        self.setFixedSize(260, 120)
+        
+        # Inner container widget so that the shadow renders inside the window boundaries
+        self.container = QWidget(self)
+        self.container.setGeometry(20, 20, 220, 80)
+        self.container.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        self.shadow = QGraphicsDropShadowEffect(self.container)
+        self.shadow.setBlurRadius(15)
+        self.shadow.setColor(QColor(0, 0, 0, 120))
+        self.shadow.setOffset(0, 4)
+        self.container.setGraphicsEffect(self.shadow)
+        
+        self.text_label = QLabel(self.container)
+        self.text_label.setWordWrap(True)
+        self.text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.text_label.setFont(QFont("DM Sans", 9))
+        self.text_label.setStyleSheet("color: rgba(255, 255, 255, 220); background: transparent;")
+        self.text_label.setGeometry(12, 10, 196, 60)
+        
+        # Connect container paint event
+        self.container.paintEvent = self._paint_container
+        
+        self.hide()
+
+    def reposition(self, pos):
+        from PyQt6.QtCore import QPoint
+        # Offset window position so that the container (offset by 20, 20) aligns with the original target position
+        self.move(pos - QPoint(20, 20))
+
+    def show_message(self, text: str, pos):
+        self.text_label.setText(text)
+        self.reposition(pos)
+        self.show()
+        self.raise_()
+
+    def _paint_container(self, event):
+        p = QPainter(self.container)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        path = QPainterPath()
+        r = 10
+        w, h = 220, 80
+        arrow_w = 8
+        rect = QRectF(arrow_w, 0, w - arrow_w - 2, h - 2)
+        path.addRoundedRect(rect, r, r)
+        
+        arrow = QPainterPath()
+        arrow.moveTo(arrow_w, h / 2 - 6)
+        arrow.lineTo(0, h / 2)
+        arrow.lineTo(arrow_w, h / 2 + 6)
+        arrow.closeSubpath()
+        path = path.united(arrow)
+        
+        grad = QLinearGradient(0, 0, 0, h)
+        grad.setColorAt(0, QColor(30, 24, 35, 240))
+        grad.setColorAt(1, QColor(18, 14, 22, 245))
+        p.fillPath(path, QBrush(grad))
+        
+        border_grad = QLinearGradient(0, 0, w, h)
+        border_grad.setColorAt(0.0, QColor(255, 255, 255, 60))
+        border_grad.setColorAt(1.0, QColor(255, 255, 255, 15))
+        p.setPen(QPen(border_grad, 1.0))
+        p.drawPath(path)
+        p.end()
+
+
+# ── Procedural Mascot Companion (No asset files used) ──────────────────────────
+class ProceduralMascot(QWidget):
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+        self.main_window = main_window
+        self.setFixedSize(54, 54)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        self.is_logged_in = False
+        self._tear_y = 0.0
+        self._tear_opacity = 255
+        
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._animate)
+        self.timer.start(50)
+        self._anim_frame = 0
+
+    def set_login_state(self, is_logged_in: bool):
+        self.is_logged_in = is_logged_in
+        self.update()
+
+    def _animate(self):
+        self._anim_frame += 1
+        if not self.is_logged_in:
+            self._tear_y += 1.5
+            if self._tear_y > 20:
+                self._tear_y = 0
+            self._tear_opacity = int(255 * (1.0 - (self._tear_y / 20.0)))
+        self.update()
+
+    def enterEvent(self, event):
+        if self.main_window:
+            self.main_window._show_mascot_bubble()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        if self.main_window:
+            self.main_window._hide_mascot_bubble()
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            if self.main_window:
+                self.main_window._switch_tab(3)
+        super().mousePressEvent(e)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        w, h = self.width(), self.height()
+        r = min(w, h) / 2 - 4
+        cx, cy = w / 2, h / 2
+        
+        import math
+        scale = 1.0 + 0.03 * math.sin(self._anim_frame * 0.15)
+        
+        p.save()
+        p.translate(cx, cy)
+        p.scale(scale, scale)
+        
+        grad = QLinearGradient(-r, -r, r, r)
+        if self.is_logged_in:
+            grad.setColorAt(0.0, QColor("#FCD34D"))
+            grad.setColorAt(1.0, QColor("#F59E0B"))
+        else:
+            grad.setColorAt(0.0, QColor("#94A3B8"))
+            grad.setColorAt(1.0, QColor("#475569"))
+            
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(grad))
+        p.drawEllipse(QRectF(-r, -r, r*2, r*2))
+        
+        path_l = QPainterPath()
+        path_l.moveTo(-r * 0.8, -r * 0.4)
+        path_l.lineTo(-r * 0.9, -r * 1.1)
+        path_l.lineTo(-r * 0.3, -r * 0.8)
+        path_l.closeSubpath()
+        p.fillPath(path_l, QBrush(grad))
+        
+        path_r = QPainterPath()
+        path_r.moveTo(r * 0.8, -r * 0.4)
+        path_r.lineTo(r * 0.9, -r * 1.1)
+        path_r.lineTo(r * 0.3, -r * 0.8)
+        path_r.closeSubpath()
+        p.fillPath(path_r, QBrush(grad))
+        
+        eye_pen = QPen(QColor("#ffffff" if self.is_logged_in else "#1e293b"), 2.0)
+        eye_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        p.setPen(eye_pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        
+        if self.is_logged_in:
+            p.drawArc(int(-r * 0.5), int(-r * 0.3), int(r * 0.3), int(r * 0.2), 0 * 16, 180 * 16)
+            p.drawArc(int(r * 0.2), int(-r * 0.3), int(r * 0.3), int(r * 0.2), 0 * 16, 180 * 16)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QBrush(QColor(251, 113, 133, 150)))
+            p.drawEllipse(QRectF(-r * 0.65, -r * 0.05, r * 0.25, r * 0.15))
+            p.drawEllipse(QRectF(r * 0.4, -r * 0.05, r * 0.25, r * 0.15))
+        else:
+            p.drawLine(int(-r * 0.5), int(-r * 0.15), int(-r * 0.3), int(-r * 0.35))
+            p.drawLine(int(r * 0.5), int(-r * 0.15), int(r * 0.3), int(-r * 0.35))
+            
+        mouth_pen = QPen(QColor("#ffffff" if self.is_logged_in else "#1e293b"), 1.8)
+        mouth_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        p.setPen(mouth_pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        
+        if self.is_logged_in:
+            p.drawArc(int(-r * 0.15), int(-r * 0.05), int(r * 0.3), int(r * 0.25), 180 * 16, 180 * 16)
+        else:
+            p.drawArc(int(-r * 0.15), int(r * 0.05), int(r * 0.3), int(r * 0.2), 0 * 16, 180 * 16)
+            
+        p.restore()
+        
+        if not self.is_logged_in:
+            tear_pen = QPen(QColor(96, 165, 250, self._tear_opacity), 1.5)
+            p.setPen(tear_pen)
+            p.setBrush(QBrush(QColor(191, 219, 254, self._tear_opacity)))
+            path_t = QPainterPath()
+            tx = cx - r * 0.45
+            ty = cy + r * 0.1 + self._tear_y
+            path_t.moveTo(tx, ty)
+            path_t.lineTo(tx - 2, ty + 4)
+            path_t.lineTo(tx + 2, ty + 4)
+            path_t.closeSubpath()
+            p.fillPath(path_t, QBrush(QColor(191, 219, 254, self._tear_opacity)))
+            p.drawPath(path_t)
+            
+        p.end()
+
+
 # ── Main Window ────────────────────────────────────────────────────────────────
 class MainWindow(QWidget):
     update_detected = pyqtSignal(str, str)
@@ -692,6 +908,7 @@ class MainWindow(QWidget):
         self._is_pro          = False
         self._picker          = LocalAssetPicker()
         self._update_url      = None
+        self.speech_bubble    = SpeechBubble(self)
 
         self.setWindowTitle("Goofy Focus")
         self.setFixedSize(750, 560)
@@ -722,6 +939,10 @@ class MainWindow(QWidget):
         self._setup_tray()
         self._connect_signals()
         self._load_settings()
+        self._connect_settings_signals()
+        self._update_mascot()
+        # Trigger brief startup bubble for Guest
+        QTimer.singleShot(1500, self._show_mascot_bubble_brief)
         self.controller.reset()
         self._picker.start(is_pro=self._is_pro)
         self.update_detected.connect(self._notify_update)
@@ -746,82 +967,10 @@ class MainWindow(QWidget):
         sidebar_lay.setSpacing(20)
         sidebar_lay.setAlignment(Qt.AlignmentFlag.AlignHCenter)
 
-        # macOS style window controls (realistic spherical radial gradients with hover symbols)
-        title_dots = QHBoxLayout()
-        title_dots.setSpacing(8)
-        title_dots.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        btn_dot_close = QPushButton()
-        btn_dot_close.setFixedSize(12, 12)
-        btn_dot_close.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_dot_close.setText("×")
-        btn_dot_close.setStyleSheet("""
-            QPushButton {
-                background: qradialgradient(cx:0.35, cy:0.35, radius:0.5, fx:0.35, fy:0.35, stop:0 #ff7b72, stop:0.75 #ff3b30, stop:1 #b51c15);
-                border: 1px solid rgba(0, 0, 0, 51);
-                border-radius: 6px;
-                color: transparent;
-                font-size: 8px;
-                font-family: 'Segoe UI', Arial, sans-serif;
-                font-weight: bold;
-                text-align: center;
-                padding-bottom: 2px;
-            }
-            QPushButton:hover {
-                color: rgba(0, 0, 0, 160);
-            }
-        """)
-        btn_dot_close.clicked.connect(self._quit_app)
-        
-        btn_dot_min = QPushButton()
-        btn_dot_min.setFixedSize(12, 12)
-        btn_dot_min.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_dot_min.setText("−")
-        btn_dot_min.setStyleSheet("""
-            QPushButton {
-                background: qradialgradient(cx:0.35, cy:0.35, radius:0.5, fx:0.35, fy:0.35, stop:0 #ffeb99, stop:0.75 #ffcc00, stop:1 #b58900);
-                border: 1px solid rgba(0, 0, 0, 51);
-                border-radius: 6px;
-                color: transparent;
-                font-size: 8px;
-                font-family: 'Segoe UI', Arial, sans-serif;
-                font-weight: bold;
-                text-align: center;
-                padding-bottom: 2px;
-            }
-            QPushButton:hover {
-                color: rgba(0, 0, 0, 160);
-            }
-        """)
-        btn_dot_min.clicked.connect(self.showMinimized)
-        
-        btn_dot_max = QPushButton()
-        btn_dot_max.setFixedSize(12, 12)
-        btn_dot_max.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_dot_max.setText("+")
-        btn_dot_max.setStyleSheet("""
-            QPushButton {
-                background: qradialgradient(cx:0.35, cy:0.35, radius:0.5, fx:0.35, fy:0.35, stop:0 #9effb1, stop:0.75 #34c759, stop:1 #1b8535);
-                border: 1px solid rgba(0, 0, 0, 51);
-                border-radius: 6px;
-                color: transparent;
-                font-size: 8px;
-                font-family: 'Segoe UI', Arial, sans-serif;
-                font-weight: bold;
-                text-align: center;
-                padding-bottom: 2px;
-            }
-            QPushButton:hover {
-                color: rgba(0, 0, 0, 160);
-            }
-        """)
-        btn_dot_max.clicked.connect(self._toggle_maximized)
-        
-        title_dots.addWidget(btn_dot_close)
-        title_dots.addWidget(btn_dot_min)
-        title_dots.addWidget(btn_dot_max)
-        sidebar_lay.addLayout(title_dots)
-        sidebar_lay.addSpacing(12)
+        # Procedural Mascot (delightful vector companion - zero asset files)
+        self.mascot_lbl = ProceduralMascot(main_window=self)
+        sidebar_lay.addWidget(self.mascot_lbl, alignment=Qt.AlignmentFlag.AlignCenter)
+        sidebar_lay.addSpacing(6)
 
         # Navigation items
         self.sidebar_btns = []
@@ -852,6 +1001,7 @@ class MainWindow(QWidget):
         # Profile avatar
         self.btn_avatar = ProfileAvatar()
         self.btn_avatar.clicked.connect(self._on_avatar_clicked)
+        self.btn_avatar.setToolTip("Sign in to sync focus sessions" if not self._user_info else "Account settings")
         sidebar_lay.addWidget(self.btn_avatar, alignment=Qt.AlignmentFlag.AlignCenter)
         
         main_lay.addWidget(self.sidebar)
@@ -860,8 +1010,88 @@ class MainWindow(QWidget):
         self.content_container = ContentGlassCard(border_radius=16)
         self.content_container.setObjectName("content_container")
         content_lay = QVBoxLayout(self.content_container)
-        content_lay.setContentsMargins(22, 22, 22, 22)
+        content_lay.setContentsMargins(22, 0, 22, 22)
         content_lay.setSpacing(0)
+
+        # Window controls header at top right of main content area (Windows standard - Jakob's Law)
+        top_bar = QWidget()
+        top_bar.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        top_bar.setFixedHeight(30)
+        top_bar_lay = QHBoxLayout(top_bar)
+        top_bar_lay.setContentsMargins(0, 6, 0, 0)
+        top_bar_lay.setSpacing(0)
+        top_bar_lay.addStretch()
+        
+        btn_win_min = QPushButton("🗕")
+        btn_win_min.setFixedSize(32, 24)
+        btn_win_min.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_win_min.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {TEXT_LOW};
+                border: none;
+                font-size: 11px;
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }}
+            QPushButton:hover {{
+                background: rgba(255, 255, 255, 20);
+                color: {TEXT_HI};
+            }}
+            QPushButton:pressed {{
+                background: rgba(255, 255, 255, 10);
+            }}
+        """)
+        btn_win_min.clicked.connect(self.showMinimized)
+
+        btn_win_max = QPushButton("🗖")
+        btn_win_max.setFixedSize(32, 24)
+        btn_win_max.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_win_max.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {TEXT_LOW};
+                border: none;
+                font-size: 11px;
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }}
+            QPushButton:hover {{
+                background: rgba(255, 255, 255, 20);
+                color: {TEXT_HI};
+            }}
+            QPushButton:pressed {{
+                background: rgba(255, 255, 255, 10);
+            }}
+        """)
+        btn_win_max.clicked.connect(self._toggle_maximized)
+
+        btn_win_close = QPushButton("✕")
+        btn_win_close.setFixedSize(32, 24)
+        btn_win_close.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_win_close.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {TEXT_LOW};
+                border: none;
+                font-size: 11px;
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }}
+            QPushButton:hover {{
+                background: #E81123;
+                color: white;
+            }}
+            QPushButton:pressed {{
+                background: #F1707A;
+                color: white;
+            }}
+        """)
+        btn_win_close.clicked.connect(self._quit_app)
+        
+        top_bar_lay.addWidget(btn_win_min)
+        top_bar_lay.addWidget(btn_win_max)
+        top_bar_lay.addWidget(btn_win_close)
+        
+        content_lay.addWidget(top_bar)
+        content_lay.addSpacing(12)
 
         self.stack = QStackedWidget()
         self.stack.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -1453,27 +1683,15 @@ class MainWindow(QWidget):
         lay.addWidget(_divider())
         lay.addWidget(_setting_row("Sounds",          "ambient break audio",       sounds_w))
 
-        # ── Save button ────────────────────────────────────────────────────────
+        # ── Auto-save Status Label ──────────────────────────────────────────────
         lay.addSpacing(14)
-        self.btn_apply = QPushButton("save settings")
-        self.btn_apply.setFixedHeight(38)
-        self.btn_apply.setStyleSheet(f"""
-            QPushButton {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {ACCENT}, stop:1 {ACCENT_2});
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-size: 11px;
-                font-family: 'DM Sans';
-                font-weight: 600;
-            }}
-            QPushButton:hover {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #ff8da1, stop:1 #bfa3ff);
-            }}
-        """)
         save_row = QHBoxLayout()
         save_row.setContentsMargins(16, 0, 16, 14)
-        save_row.addWidget(self.btn_apply)
+        
+        autosave_lbl = QLabel("✓ Settings save automatically")
+        autosave_lbl.setStyleSheet(f"color: {TEXT_LOW}; font-size: 11px; font-family: 'DM Sans'; font-weight: 500; background: transparent;")
+        save_row.addWidget(autosave_lbl, 0, Qt.AlignmentFlag.AlignCenter)
+        
         lay.addLayout(save_row)
 
         return card
@@ -1525,10 +1743,51 @@ class MainWindow(QWidget):
         self.circ.btn_pause.clicked.connect(self._ui_pause)
         self.circ.btn_skip.clicked.connect(self._ui_skip)
         self.circ.btn_reset.clicked.connect(self._ui_reset)
-        self.btn_apply.clicked.connect(self._apply_settings)
         self.controller.phase_changed.connect(self._on_phase_changed)
         self.controller.session_done.connect(self._on_session_done)
         self.controller.session_recorded.connect(self._save_session)
+
+    def _connect_settings_signals(self):
+        self._dur_spins["work"]._min_spin.valueChanged.connect(lambda: self._apply_settings())
+        self._dur_spins["work"]._sec_spin.valueChanged.connect(lambda: self._apply_settings())
+        self._dur_spins["short"]._min_spin.valueChanged.connect(lambda: self._apply_settings())
+        self._dur_spins["short"]._sec_spin.valueChanged.connect(lambda: self._apply_settings())
+        self._dur_spins["long"]._min_spin.valueChanged.connect(lambda: self._apply_settings())
+        self._dur_spins["long"]._sec_spin.valueChanged.connect(lambda: self._apply_settings())
+        
+        self._flow_combo.currentIndexChanged.connect(lambda: self._apply_settings())
+        self._spc_spin.valueChanged.connect(lambda: self._apply_settings())
+        self._startup_toggle.clicked.connect(lambda: self._apply_settings())
+
+    def _update_mascot(self):
+        is_logged_in = bool(self._user_info)
+        if hasattr(self, 'mascot_lbl') and self.mascot_lbl:
+            self.mascot_lbl.set_login_state(is_logged_in)
+
+    def _show_mascot_bubble(self):
+        from PyQt6.QtCore import QPoint
+        # Calculate global position next to the mascot label (using mapToGlobal for top-level window tooltip)
+        mascot_pos = self.mascot_lbl.mapToGlobal(self.mascot_lbl.rect().topRight())
+        pos = mascot_pos + QPoint(10, -16)
+        print(f"[mascot] Showing speech bubble at screen pos: {pos.x()}, {pos.y()} (mascot: {mascot_pos.x()}, {mascot_pos.y()})")
+        
+        is_logged_in = bool(self._user_info)
+        if is_logged_in:
+            text = "😸 Yay! We are signed in and syncing your focus progress! Let's do this!"
+        else:
+            text = "I'm sad! Your focus sessions are not being synced. Click me to Sign In with Google! 😿"
+            
+        if hasattr(self, 'speech_bubble'):
+            self.speech_bubble.show_message(text, pos)
+
+    def _hide_mascot_bubble(self):
+        if hasattr(self, 'speech_bubble'):
+            self.speech_bubble.hide()
+
+    def _show_mascot_bubble_brief(self):
+        if not bool(self._user_info):
+            self._show_mascot_bubble()
+            QTimer.singleShot(6000, self._hide_mascot_bubble)
 
     def _save_session(self, duration_secs: int, phase: str):
         sub = self._user_info.get("id", "guest")
@@ -1668,8 +1927,9 @@ class MainWindow(QWidget):
             set_startup(startup_enabled)
             s.setValue("launch_on_startup", startup_enabled)
             
-            self.circ.btn_pause.hide(); self.circ.btn_start.show(); self.circ.lbl_play_pause.setText("START")
-            self._act_toggle.setText("Pause timer")
+            if not self.controller.is_running:
+                self.circ.btn_pause.hide(); self.circ.btn_start.show(); self.circ.lbl_play_pause.setText("START")
+                self._act_toggle.setText("Pause timer")
             self._set_status("saved ✓", GREEN)
             s.setValue("work_secs",  self._dur_spins["work"].value_secs())
             s.setValue("short_secs", self._dur_spins["short"].value_secs())
@@ -1815,18 +2075,14 @@ class MainWindow(QWidget):
             self._sync_pro_status()
 
     def _do_google_login(self):
-        self.btn_auth_page.setText("signing in…")
-        QApplication.processEvents()
-        try:
-            info            = perform_login()
+        login_dlg = LoginDialog(self)
+        if login_dlg.exec() == LoginDialog.DialogCode.Accepted:
+            info = login_dlg.user_info
             self._user_info = info
-            self._is_pro    = info.get("is_pro", False)
+            self._is_pro = info.get("is_pro", False)
             self._refresh_pro_badge()
             self._set_login_state(info)
-        except Exception as e:
-            self.btn_auth_page.setText("Sign In with Google")
-            self._set_status("auth failed", "rgba(248,113,113,160)")
-            print(f"Auth error: {e}")
+            self._load_settings()
 
     def _set_login_state(self, info: dict):
         """Switch auth state and update UI components."""
@@ -1834,6 +2090,8 @@ class MainWindow(QWidget):
         
         # Update sidebar avatar
         self.btn_avatar.set_user(info)
+        self.btn_avatar.setToolTip("Account settings")
+        self._update_mascot()
         
         # Update Analytics page labels
         self.user_email_lbl.setText(f"Logged in as {email}")
@@ -1924,6 +2182,30 @@ class MainWindow(QWidget):
         except Exception:
             pass
         self.btn_auth_page.clicked.connect(self._do_google_login)
+        
+        # Hide the main window and show LoginDialog
+        self.hide()
+        login_dlg = LoginDialog()
+        login_dlg.exec()
+        
+        # Check if they logged in during the dialog
+        from auth import load_cached_user
+        info = load_cached_user()
+        if info:
+            self._user_info = info
+            self._is_pro = info.get("is_pro", False)
+            self._refresh_pro_badge()
+            self._set_login_state(info)
+        else:
+            self._user_info = {}
+            self._is_pro = False
+            self._refresh_pro_badge()
+            self.btn_avatar.set_user({})
+            self.btn_avatar.setToolTip("Sign in to sync focus sessions")
+            self._update_mascot()
+            
+        self._load_settings()
+        self.show()
 
     def _sync_pro_status(self):
         """Asynchronously check user's Pro status from Supabase to sync purchase status."""
@@ -2179,11 +2461,25 @@ del "%~f0"
     def mouseMoveEvent(self, e):
         if e.buttons() == Qt.MouseButton.LeftButton and self._drag_pos:
             self.move(e.globalPosition().toPoint() - self._drag_pos)
+            if hasattr(self, 'speech_bubble') and self.speech_bubble.isVisible():
+                from PyQt6.QtCore import QPoint
+                mascot_pos = self.mascot_lbl.mapToGlobal(self.mascot_lbl.rect().topRight())
+                pos = mascot_pos + QPoint(10, -16)
+                self.speech_bubble.reposition(pos)
 
     def mouseReleaseEvent(self, e): self._drag_pos = None
 
     def changeEvent(self, event):
+        if event.type() == QEvent.Type.WindowStateChange:
+            if self.isMinimized():
+                if hasattr(self, 'speech_bubble'):
+                    self.speech_bubble.hide()
         super().changeEvent(event)
+
+    def hideEvent(self, event):
+        if hasattr(self, 'speech_bubble'):
+            self.speech_bubble.hide()
+        super().hideEvent(event)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -2270,6 +2566,13 @@ def main():
     icon_path = os.path.join(ASSETS_DIR, "icon.png")
     if os.path.exists(icon_path):
         app.setWindowIcon(QIcon(icon_path))
+    from auth import load_cached_user
+    cached_user = load_cached_user()
+    if not cached_user:
+        from ui.login import LoginDialog
+        login_dlg = LoginDialog()
+        login_dlg.exec()
+            
     controller = TimerController()
     window     = MainWindow(controller)
     window.show()

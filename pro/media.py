@@ -165,6 +165,10 @@ class GifPackManager(QWidget):
         p.drawPath(path)
         p.end()
 
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()
+
 class SoundManagerWindow(QWidget):
     def __init__(self, is_pro: bool, parent=None):
         super().__init__(parent)
@@ -301,3 +305,7 @@ class SoundManagerWindow(QWidget):
         p.setPen(QPen(border_grad, 1.2))
         p.drawPath(path)
         p.end()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()

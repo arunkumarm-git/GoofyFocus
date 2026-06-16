@@ -518,14 +518,20 @@ class StatsWindow(QWidget):
         QTimer.singleShot(3000, lambda: self.status_lbl.setText(""))
 
     def mousePressEvent(self, e):
-        if e.button() == Qt.MouseButton.LeftButton:
+        if not self._is_embedded and e.button() == Qt.MouseButton.LeftButton:
             self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
 
     def mouseMoveEvent(self, e):
-        if e.buttons() == Qt.MouseButton.LeftButton and hasattr(self, '_drag_pos') and self._drag_pos:
+        if not self._is_embedded and e.buttons() == Qt.MouseButton.LeftButton and hasattr(self, '_drag_pos') and self._drag_pos:
             self.move(e.globalPosition().toPoint() - self._drag_pos)
 
-    def mouseReleaseEvent(self, e): self._drag_pos = None
+    def mouseReleaseEvent(self, e):
+        if not self._is_embedded:
+            self._drag_pos = None
+
+    def keyPressEvent(self, event):
+        if not self._is_embedded and event.key() == Qt.Key.Key_Escape:
+            self.close()
 
     def paintEvent(self, event):
         p = QPainter(self)
