@@ -67,15 +67,14 @@ serve(async (req) => {
     const isReversed = ["Refunded", "Reversed", "Denied", "Canceled_Reversal", "Failed"].includes(paymentStatus ?? "")
 
     if (isCompleted || isReversed) {
-      const isPro = isCompleted
       let updated = false
 
       // Primary match: by custom user ID (google_sub) passed during checkout
       if (customUserId) {
-        console.log(`[PayPal Webhook] Attempting update for user_id (google_sub) ${customUserId} to is_pro = ${isPro}`)
+        console.log(`[PayPal Webhook] Attempting update for user_id (google_sub) ${customUserId} to is_pro = true, has_donated = ${isCompleted}`)
         const { error } = await supabase
           .from("users")
-          .update({ is_pro: isPro })
+          .update({ is_pro: true, has_donated: isCompleted })
           .eq("google_sub", customUserId)
 
         if (error) {
@@ -87,10 +86,10 @@ serve(async (req) => {
 
       // Secondary match fallback: by payer email
       if (!updated && payerEmail) {
-        console.log(`[PayPal Webhook] Fallback: Attempting update for email ${payerEmail} to is_pro = ${isPro}`)
+        console.log(`[PayPal Webhook] Fallback: Attempting update for email ${payerEmail} to is_pro = true, has_donated = ${isCompleted}`)
         const { error } = await supabase
           .from("users")
-          .update({ is_pro: isPro })
+          .update({ is_pro: true, has_donated: isCompleted })
           .eq("email", payerEmail)
 
         if (error) {
@@ -101,7 +100,7 @@ serve(async (req) => {
       }
 
       if (updated) {
-        console.log(`[PayPal Webhook] Successfully updated user Pro status to ${isPro}`)
+        console.log(`[PayPal Webhook] Successfully updated user Pro and Donation status (has_donated = ${isCompleted})`)
       } else {
         console.warn(`[PayPal Webhook] User not found or update skipped for user_id=${customUserId}, email=${payerEmail}`)
       }

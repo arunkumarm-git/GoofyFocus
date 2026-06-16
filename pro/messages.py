@@ -24,9 +24,9 @@ class CustomMessagesWindow(QWidget):
         
         # Soft premium drop shadow
         self.shadow = QGraphicsDropShadowEffect(self)
-        self.shadow.setBlurRadius(35)
+        self.shadow.setBlurRadius(15)
         self.shadow.setColor(QColor(0, 0, 0, 160))
-        self.shadow.setOffset(0, 8)
+        self.shadow.setOffset(0, 3)
         self.setGraphicsEffect(self.shadow)
         
         self._build_ui()
@@ -206,7 +206,10 @@ class CustomMessagesWindow(QWidget):
 
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            if e.position().y() < 40:
+                self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            else:
+                super().mousePressEvent(e)
 
     def mouseMoveEvent(self, e):
         if e.buttons() == Qt.MouseButton.LeftButton and hasattr(self, '_drag_pos') and self._drag_pos:
@@ -214,6 +217,7 @@ class CustomMessagesWindow(QWidget):
 
     def mouseReleaseEvent(self, e):
         self._drag_pos = None
+        super().mouseReleaseEvent(e)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:

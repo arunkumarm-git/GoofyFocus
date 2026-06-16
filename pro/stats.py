@@ -10,7 +10,6 @@ from PyQt6.QtCore import Qt, QRectF, QTimer
 from PyQt6.QtGui import QPainter, QColor, QPainterPath, QLinearGradient, QBrush, QPen, QFont
 from auth import get_supabase_client
 from .dashboard import generate_dashboard
-from .gate import CurrencyWorker
 
 # ── Design tokens (matching app.py) ──────────────────
 BG_0      = "#0f0d0e"
@@ -32,12 +31,6 @@ class PromoAdCard(QWidget):
         self.setFixedHeight(150)
         
         self._build_ui()
-        
-        # Start currency worker thread
-        self.currency_worker = CurrencyWorker(1080)
-        self.currency_thread = threading.Thread(target=self.currency_worker.run, daemon=True)
-        self.currency_worker.finished.connect(self._on_currency_resolved)
-        self.currency_thread.start()
 
     def _build_ui(self):
         lay = QVBoxLayout(self)
@@ -48,21 +41,21 @@ class PromoAdCard(QWidget):
         hl = QHBoxLayout()
         icon = QLabel("✦")
         icon.setStyleSheet(f"color: {ACCENT}; font-size: 14px; font-weight: bold; background: transparent;")
-        title = QLabel("unlock pro tier")
+        title = QLabel("support goofyfocus")
         title.setFont(QFont("DM Mono", 11, QFont.Weight.Bold))
         title.setStyleSheet(f"color: white; background: transparent;")
         hl.addWidget(icon)
         hl.addWidget(title)
         hl.addStretch()
         
-        self.price_lbl = QLabel("₹1,080 lifetime")
+        self.price_lbl = QLabel("any amount")
         self.price_lbl.setFont(QFont("DM Mono", 10, QFont.Weight.Bold))
         self.price_lbl.setStyleSheet(f"color: {ACCENT}; background: transparent;")
         hl.addWidget(self.price_lbl)
         lay.addLayout(hl)
         
         # Description
-        desc = QLabel("Get interactive dashboard, CSV export, custom rest screen messages, sounds, and GIF packs.")
+        desc = QLabel("GoofyFocus is open-source and free for everyone. If you enjoy using this app, please consider supporting its development!")
         desc.setWordWrap(True)
         desc.setFont(QFont("DM Sans", 9))
         desc.setStyleSheet(f"color: {TEXT_MID}; background: transparent; line-height: 1.3;")
@@ -71,7 +64,7 @@ class PromoAdCard(QWidget):
         lay.addStretch()
         
         # Call to Action button
-        self.btn_action = QPushButton("get pro now")
+        self.btn_action = QPushButton("support goofyfocus 💖")
         self.btn_action.setFixedHeight(30)
         self.btn_action.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_action.setStyleSheet(f"""
@@ -90,9 +83,6 @@ class PromoAdCard(QWidget):
         """)
         self.btn_action.clicked.connect(self._open_upgrade)
         lay.addWidget(self.btn_action)
-
-    def _on_currency_resolved(self, code, val, formatted_text):
-        self.price_lbl.setText(f"{formatted_text} lifetime")
 
     def _open_upgrade(self):
         # Resolve main window reference (traverse upwards if needed)
@@ -143,11 +133,10 @@ class StatsWindow(QWidget):
             self.setFixedSize(320, 420)
             self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
             
-            # Soft premium drop shadow
             self.shadow = QGraphicsDropShadowEffect(self)
-            self.shadow.setBlurRadius(35)
+            self.shadow.setBlurRadius(15)
             self.shadow.setColor(QColor(0, 0, 0, 160))
-            self.shadow.setOffset(0, 8)
+            self.shadow.setOffset(0, 3)
             self.setGraphicsEffect(self.shadow)
             
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -281,10 +270,12 @@ class StatsWindow(QWidget):
             from assets import USER_DATA_DIR
             local_db = os.path.join(USER_DATA_DIR, "sessions.json")
             data = []
+            current_sub = self._user_info.get("id", "guest") if self._user_info else "guest"
             if os.path.exists(local_db):
                 with open(local_db, "r") as f:
-                    data = json.load(f)
-                print(f"[stats] loaded {len(data)} rows from local sessions.json")
+                    all_data = json.load(f)
+                data = [r for r in all_data if r.get("google_sub", "guest") == current_sub]
+                print(f"[stats] loaded {len(data)} user-specific rows from local sessions.json")
             else:
                 # 2. Fallback to Supabase
                 print(f"[stats] local db not found at {local_db}, trying cloud...")
@@ -475,9 +466,11 @@ class StatsWindow(QWidget):
             from assets import USER_DATA_DIR
             local_db = os.path.join(USER_DATA_DIR, "sessions.json")
             rows = []
+            current_sub = self._user_info.get("id", "guest") if self._user_info else "guest"
             if os.path.exists(local_db):
                 with open(local_db, "r") as f:
-                    rows = json.load(f)
+                    all_rows = json.load(f)
+                rows = [r for r in all_rows if r.get("google_sub", "guest") == current_sub]
             else:
                 # 2. Fallback to Supabase
                 sb = get_supabase_client()
@@ -519,7 +512,10 @@ class StatsWindow(QWidget):
 
     def mousePressEvent(self, e):
         if not self._is_embedded and e.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            if e.position().y() < 40:
+                self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            else:
+                super().mousePressEvent(e)
 
     def mouseMoveEvent(self, e):
         if not self._is_embedded and e.buttons() == Qt.MouseButton.LeftButton and hasattr(self, '_drag_pos') and self._drag_pos:
@@ -528,6 +524,7 @@ class StatsWindow(QWidget):
     def mouseReleaseEvent(self, e):
         if not self._is_embedded:
             self._drag_pos = None
+            super().mouseReleaseEvent(e)
 
     def keyPressEvent(self, event):
         if not self._is_embedded and event.key() == Qt.Key.Key_Escape:

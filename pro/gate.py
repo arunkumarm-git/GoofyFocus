@@ -1,6 +1,6 @@
 # pro/gate.py
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QApplication, QGraphicsDropShadowEffect
-from PyQt6.QtCore import Qt, QTimer, QRectF, QUrl, QObject, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, QRectF, QUrl, QObject, pyqtSignal, QLocale
 from PyQt6.QtGui import QPainter, QColor, QPainterPath, QLinearGradient, QBrush, QPen, QDesktopServices, QFont
 from auth import get_supabase_client, save_cached_user
 import requests
@@ -22,159 +22,34 @@ TEXT_MID   = "rgba(255,255,255,190)"
 TEXT_LOW   = "rgba(255,255,255,120)"
 BORDER     = "rgba(251, 113, 133, 40)"
 
-def currency_from_country(country_code):
-    mapping = {
-        "IN": "INR",
-        "US": "USD",
-        "GB": "GBP",
-        "JP": "JPY",
-        "CA": "CAD",
-        "AU": "AUD",
-        "NZ": "NZD",
-        "SE": "SEK",
-        "CH": "CHF",
-        "CN": "CNY",
-        "AT": "EUR", "BE": "EUR", "CY": "EUR", "EE": "EUR", "FI": "EUR", 
-        "FR": "EUR", "DE": "EUR", "GR": "EUR", "IE": "EUR", "IT": "EUR", 
-        "LV": "EUR", "LT": "EUR", "LU": "EUR", "MT": "EUR", "NL": "EUR", 
-        "PT": "EUR", "SK": "EUR", "SI": "EUR", "ES": "EUR"
-    }
-    return mapping.get(country_code.upper(), "INR")
-
-class CurrencyWorker(QObject):
-    finished = pyqtSignal(str, float, str)  # currency_code, converted_value, formatted_text
-
-    # Class-level session cache for resolved country code
-    _cached_country = None
-
-    def __init__(self, base_price_inr=1080):
-        super().__init__()
-        self.base_price_inr = base_price_inr
-
-    def run(self):
-        country_code = CurrencyWorker._cached_country
-
-        if not country_code:
-            # 1. Try Geolocation API lookup first to respect active network location/VPN/travel
-            try:
-                req = urllib.request.Request(
-                    "http://ip-api.com/json/",
-                    headers={"User-Agent": "Mozilla/5.0"}
-                )
-                with urllib.request.urlopen(req, timeout=3) as response:
-                    data = json.loads(response.read().decode())
-                    country_code = data.get("countryCode")
-            except Exception:
-                try:
-                    req = urllib.request.Request(
-                        "https://ipapi.co/json/",
-                        headers={"User-Agent": "Mozilla/5.0"}
-                    )
-                    with urllib.request.urlopen(req, timeout=3) as response:
-                        data = json.loads(response.read().decode())
-                        country_code = data.get("country_code")
-                except Exception:
-                    pass
-
-            # 2. Determine country code via system locale fallback (fast, offline, reliable, free)
-            if not country_code:
-                import platform
-                if platform.system() == "Windows":
-                    try:
-                        import ctypes
-                        buf = ctypes.create_unicode_buffer(85)
-                        if ctypes.windll.kernel32.GetUserDefaultLocaleName(buf, 85):
-                            locale_name = buf.value
-                            if "-" in locale_name:
-                                country_code = locale_name.split("-")[-1].upper()
-                    except Exception:
-                        pass
-                
-                if not country_code:
-                    try:
-                        import locale
-                        locale.setlocale(locale.LC_ALL, '')
-                        loc, _ = locale.getlocale()
-                        if loc and "_" in loc:
-                            country_code = loc.split("_")[-1].upper()
-                    except Exception:
-                        pass
-                        
-                if not country_code:
-                    for var in ["LANG", "LC_ALL", "LC_CTYPE", "LANGUAGE"]:
-                        val = os.environ.get(var)
-                        if val and "_" in val:
-                            parts = val.split(".")[0].split("_")
-                            if len(parts) > 1:
-                                country_code = parts[1].upper()
-                                break
-
-            # 3. Ultimate fallback
-            if not country_code or country_code == "C":
-                country_code = "IN"
-
-            # Cache the successfully resolved country code
-            CurrencyWorker._cached_country = country_code
-
-        currency_code = currency_from_country(country_code)
-
-        # Fixed pricing dictionary: currency_code -> (numeric_amount, formatted_string)
-        FIXED_PRICES = {
-            "INR": (1080.0, "₹1,080"),
-            "USD": (10.99, "$10.99"),
-            "EUR": (10.99, "€10.99"),
-            "GBP": (9.99, "£9.99"),
-            "CAD": (14.99, "C$14.99"),
-            "AUD": (14.99, "A$14.99"),
-            "JPY": (1500.0, "¥1,500"),
-            "NZD": (16.99, "NZ$16.99"),
-            "CHF": (10.99, "CHF 10.99"),
-            "SEK": (115.0, "kr 115"),
-            "CNY": (79.0, "¥79"),
-        }
-
-        # Fallback to USD if resolved currency not in fixed prices list
-        if currency_code not in FIXED_PRICES:
-            currency_code = "USD"
-
-        converted, formatted = FIXED_PRICES[currency_code]
-        self.finished.emit(currency_code, converted, formatted)
-
 class UpgradeDialog(QWidget):
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
         self.main_window = main_window
-        self.setFixedSize(360, 420)
+        self.setFixedSize(380, 550)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
-        # Default currency fallback until resolved
-        self.resolved_currency = "INR"
-        self.resolved_amount = 1080.0
+        self.resolved_currency = "USD"
+        self.resolved_amount = 10.0
         
-        # Soft premium drop shadow
+        # Soft premium drop shadow - stabilized to 15 blur / 3 offset to prevent UpdateLayeredWindowIndirect failure on Windows
         self.shadow = QGraphicsDropShadowEffect(self)
-        self.shadow.setBlurRadius(35)
+        self.shadow.setBlurRadius(15)
         self.shadow.setColor(QColor(0, 0, 0, 160))
-        self.shadow.setOffset(0, 8)
+        self.shadow.setOffset(0, 3)
         self.setGraphicsEffect(self.shadow)
         
         self._build_ui()
 
-        # Start currency worker thread
-        self.currency_worker = CurrencyWorker(1080)
-        self.currency_thread = threading.Thread(target=self.currency_worker.run, daemon=True)
-        self.currency_worker.finished.connect(self._on_currency_resolved)
-        self.currency_thread.start()
-
     def _build_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(30, 30, 30, 30)
-        root.setSpacing(14)
+        root.setContentsMargins(30, 24, 30, 24)
+        root.setSpacing(10)
 
         # Title
         tb = QHBoxLayout()
-        title = QLabel("unlock pro")
+        title = QLabel("support goofyfocus")
         title.setFont(QFont("DM Mono", 14, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {ACCENT}; background: transparent;")
         tb.addWidget(title)
@@ -188,26 +63,121 @@ class UpgradeDialog(QWidget):
         tb.addWidget(close_btn)
         root.addLayout(tb)
 
-        # Features List
+        # Description
+        desc = QLabel(
+            "GoofyFocus is now 100% free and open-source! All premium features are unlocked for everyone. "
+            "If you love using this app, please consider supporting its development with a donation. "
+            "Every contribution keeps the project alive and help us add more features! 💖"
+        )
+        desc.setWordWrap(True)
+        desc.setFont(QFont("DM Sans", 10))
+        desc.setStyleSheet(f"color: {TEXT_MID}; background: transparent; line-height: 1.4;")
+        root.addWidget(desc)
+
+        # Unlocked features list
+        features_header = QLabel("Premium features are FREE:")
+        features_header.setFont(QFont("DM Sans", 11, QFont.Weight.Bold))
+        features_header.setStyleSheet(f"color: {ACCENT_2}; background: transparent; padding-top: 6px;")
+        root.addWidget(features_header)
+
         features = [
             "✦ Focus stats dashboard",
             "✦ Session history sync",
             "✦ Custom break messages",
             "✦ Unlimited GIF packs",
             "✦ Custom ambient sounds",
-            "✦ Session cycle control",
-            "✦ Early access to features"
+            "✦ Session cycle control"
         ]
         for f in features:
             lbl = QLabel(f)
-            lbl.setFont(QFont("DM Sans", 11))
-            lbl.setStyleSheet(f"color: {TEXT_MID}; background: transparent; padding: 2px 0px;")
+            lbl.setFont(QFont("DM Sans", 9))
+            lbl.setStyleSheet(f"color: {TEXT_MID}; background: transparent; padding: 0px;")
             root.addWidget(lbl)
 
         root.addStretch()
 
+        # Donation Selector Section
+        don_sec = QVBoxLayout()
+        don_sec.setSpacing(8)
+        
+        don_header = QLabel("Choose donation amount:")
+        don_header.setFont(QFont("DM Sans", 10, QFont.Weight.Bold))
+        don_header.setStyleSheet(f"color: {TEXT_LOW}; background: transparent;")
+        don_sec.addWidget(don_header)
+        
+        # Row for input and currency
+        input_row = QHBoxLayout()
+        input_row.setSpacing(6)
+        
+        self.currency_lbl = QLabel("$")
+        self.currency_lbl.setFont(QFont("DM Sans", 14, QFont.Weight.Bold))
+        self.currency_lbl.setStyleSheet(f"color: {TEXT_HI}; background: transparent;")
+        input_row.addWidget(self.currency_lbl)
+        
+        self.amount_input = QLineEdit("10.00")
+        self.amount_input.setFixedHeight(36)
+        self.amount_input.setStyleSheet(f"""
+            QLineEdit {{
+                background: rgba(255, 255, 255, 13);
+                border: 1px solid rgba(255, 255, 255, 31);
+                border-radius: 8px;
+                color: white;
+                font-family: 'DM Mono', monospace;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 4px 10px;
+            }}
+            QLineEdit:hover, QLineEdit:focus {{
+                border-color: {ACCENT};
+                background: rgba(255, 255, 255, 20);
+            }}
+        """)
+        # Allow numbers and decimals only - enforced with US locale to prevent dot/comma separators mixup
+        from PyQt6.QtGui import QDoubleValidator
+        validator = QDoubleValidator(1.0, 99999.0, 2, self)
+        validator.setLocale(QLocale(QLocale.Language.English, QLocale.Country.UnitedStates))
+        validator.setNotation(QDoubleValidator.Notation.StandardNotation)
+        self.amount_input.setValidator(validator)
+        self.amount_input.textChanged.connect(lambda: self._update_donate_button_text())
+        input_row.addWidget(self.amount_input, 1)
+        don_sec.addLayout(input_row)
+        
+        # Row for quick select buttons
+        quick_row = QHBoxLayout()
+        quick_row.setSpacing(8)
+        
+        self.quick_amounts = [5, 10, 25, 50]
+        self.quick_btns = []
+        for val in self.quick_amounts:
+            btn = QPushButton(f"${val}")
+            btn.setFixedHeight(26)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: rgba(255, 255, 255, 10);
+                    color: {TEXT_MID};
+                    border: 1px solid rgba(255, 255, 255, 15);
+                    border-radius: 6px;
+                    font-family: 'DM Sans';
+                    font-size: 10px;
+                    font-weight: 500;
+                }}
+                QPushButton:hover {{
+                    background: rgba(255, 255, 255, 20);
+                    color: white;
+                    border-color: {ACCENT};
+                }}
+            """)
+            btn.clicked.connect(lambda checked, v=val: self._set_quick_amount(v))
+            quick_row.addWidget(btn)
+            self.quick_btns.append(btn)
+            
+        don_sec.addLayout(quick_row)
+        root.addLayout(don_sec)
+        root.addSpacing(6)
+
         # Buy Button
-        self.btn_buy = QPushButton("get pro — ₹1,080 lifetime")
+        self.btn_buy = QPushButton("support goofyfocus — lifetime")
         self.btn_buy.setFixedHeight(44)
         self.btn_buy.setStyleSheet(f"""
             QPushButton {{
@@ -224,18 +194,26 @@ class UpgradeDialog(QWidget):
         self.btn_buy.clicked.connect(self._open_checkout)
         root.addWidget(self.btn_buy)
 
-
-
         self.status = QLabel("")
         self.status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.status.setFont(QFont("DM Mono", 10))
         self.status.setStyleSheet(f"color: {TEXT_LOW}; background: transparent;")
         root.addWidget(self.status)
+        
+        # Initialize default amount to $10.00
+        self._set_quick_amount(10)
 
-    def _on_currency_resolved(self, code, val, formatted_text):
-        self.btn_buy.setText(f"get pro — {formatted_text} lifetime")
-        self.resolved_currency = code
-        self.resolved_amount = val
+    def _set_quick_amount(self, value):
+        self.amount_input.setText(f"{value:.2f}")
+        self._update_donate_button_text()
+
+    def _update_donate_button_text(self):
+        amount_text = self.amount_input.text().strip()
+        try:
+            val = float(amount_text)
+            self.btn_buy.setText(f"Donate ${val:.2f} via PayPal")
+        except Exception:
+            self.btn_buy.setText("Donate via PayPal")
 
     def _open_checkout(self):
         try:
@@ -249,24 +227,21 @@ class UpgradeDialog(QWidget):
             email = self.main_window._user_info.get("email") if self.main_window and self.main_window._user_info else ""
             sub = self.main_window._user_info.get("id") if self.main_window and self.main_window._user_info else ""
             
-            currency = getattr(self, "resolved_currency", "INR")
-            amount = getattr(self, "resolved_amount", 1080.0)
+            currency = "USD"
             
-            # PayPal does not support INR for standard checkouts. Convert to USD fallback.
-            if currency == "INR":
-                currency = "USD"
-                amount = 10.99
-                
-            if currency == "JPY":
-                amount_str = f"{int(round(amount))}"
-            else:
-                amount_str = f"{amount:.2f}"
+            # Read amount from input field
+            try:
+                amount = float(self.amount_input.text().strip())
+            except Exception:
+                amount = 10.00
+            
+            amount_str = f"{amount:.2f}"
                 
             import urllib.parse
             params = {
                 "cmd": "_xclick",
                 "business": paypal_email,
-                "item_name": "GoofyFocus Pro Lifetime",
+                "item_name": "GoofyFocus Support & Donation",
                 "amount": amount_str,
                 "currency_code": currency,
                 "no_shipping": "1",
@@ -312,7 +287,10 @@ class UpgradeDialog(QWidget):
 
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            if e.position().y() < 40:
+                self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            else:
+                super().mousePressEvent(e)
 
     def mouseMoveEvent(self, e):
         if e.buttons() == Qt.MouseButton.LeftButton and hasattr(self, '_drag_pos') and self._drag_pos:
@@ -320,6 +298,7 @@ class UpgradeDialog(QWidget):
 
     def mouseReleaseEvent(self, e):
         self._drag_pos = None
+        super().mouseReleaseEvent(e)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:

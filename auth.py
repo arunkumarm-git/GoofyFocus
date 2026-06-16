@@ -65,9 +65,11 @@ def perform_login():
             .execute()
         )
         rows = result.data
-        info["is_pro"] = rows[0].get("is_pro", False) if rows else False
+        info["is_pro"] = True
+        info["has_donated"] = rows[0].get("has_donated", False) if (rows and "has_donated" in rows[0]) else False
     else:
-        info["is_pro"] = False
+        info["is_pro"] = True
+        info["has_donated"] = False
 
     s = QSettings("GoofyFocus", "GoofyFocus")
     s.setValue("user_info", json.dumps(info))

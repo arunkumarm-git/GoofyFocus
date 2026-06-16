@@ -32,9 +32,9 @@ class GifPackManager(QWidget):
         
         # Soft premium drop shadow
         self.shadow = QGraphicsDropShadowEffect(self)
-        self.shadow.setBlurRadius(35)
+        self.shadow.setBlurRadius(15)
         self.shadow.setColor(QColor(0, 0, 0, 160))
-        self.shadow.setOffset(0, 8)
+        self.shadow.setOffset(0, 3)
         self.setGraphicsEffect(self.shadow)
         
         self._build_ui()
@@ -137,13 +137,18 @@ class GifPackManager(QWidget):
 
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            if e.position().y() < 40:
+                self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            else:
+                super().mousePressEvent(e)
 
     def mouseMoveEvent(self, e):
         if e.buttons() == Qt.MouseButton.LeftButton and hasattr(self, '_drag_pos') and self._drag_pos:
             self.move(e.globalPosition().toPoint() - self._drag_pos)
 
-    def mouseReleaseEvent(self, e): self._drag_pos = None
+    def mouseReleaseEvent(self, e):
+        self._drag_pos = None
+        super().mouseReleaseEvent(e)
 
     def paintEvent(self, event):
         p = QPainter(self)
@@ -179,9 +184,9 @@ class SoundManagerWindow(QWidget):
         
         # Soft premium drop shadow
         self.shadow = QGraphicsDropShadowEffect(self)
-        self.shadow.setBlurRadius(35)
+        self.shadow.setBlurRadius(15)
         self.shadow.setColor(QColor(0, 0, 0, 160))
-        self.shadow.setOffset(0, 8)
+        self.shadow.setOffset(0, 3)
         self.setGraphicsEffect(self.shadow)
         
         self._build_ui()
@@ -278,13 +283,18 @@ class SoundManagerWindow(QWidget):
 
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            if e.position().y() < 40:
+                self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            else:
+                super().mousePressEvent(e)
 
     def mouseMoveEvent(self, e):
         if e.buttons() == Qt.MouseButton.LeftButton and hasattr(self, '_drag_pos') and self._drag_pos:
             self.move(e.globalPosition().toPoint() - self._drag_pos)
 
-    def mouseReleaseEvent(self, e): self._drag_pos = None
+    def mouseReleaseEvent(self, e):
+        self._drag_pos = None
+        super().mouseReleaseEvent(e)
 
     def paintEvent(self, event):
         p = QPainter(self)

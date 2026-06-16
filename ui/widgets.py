@@ -98,6 +98,7 @@ class CircularTimer(QWidget):
         self.btn_skip.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_skip.setIcon(QIcon(os.path.join(ASSETS_DIR, "icons", "skip-forward.svg")))
         self.btn_skip.setIconSize(QSize(18, 18))
+        self.btn_skip.setToolTip("Skip to next phase")
         self.btn_skip.setStyleSheet("""
             QPushButton {
                 background: transparent;
@@ -129,6 +130,7 @@ class CircularTimer(QWidget):
         self.btn_start.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_start.setIcon(QIcon(os.path.join(ASSETS_DIR, "icons", "play.svg")))
         self.btn_start.setIconSize(QSize(20, 20))
+        self.btn_start.setToolTip("Start timer")
         self.btn_start.setStyleSheet(f"""
             QPushButton {{
                 background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #FB7185, stop:1 #FDA4AF);
@@ -151,6 +153,7 @@ class CircularTimer(QWidget):
         self.btn_pause.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_pause.setIcon(QIcon(os.path.join(ASSETS_DIR, "icons", "pause.svg")))
         self.btn_pause.setIconSize(QSize(20, 20))
+        self.btn_pause.setToolTip("Pause timer")
         self.btn_pause.setStyleSheet(f"""
             QPushButton {{
                 background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #FB7185, stop:1 #FDA4AF);
@@ -189,6 +192,7 @@ class CircularTimer(QWidget):
         self.btn_reset.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_reset.setIcon(QIcon(os.path.join(ASSETS_DIR, "icons", "rotate-ccw.svg")))
         self.btn_reset.setIconSize(QSize(18, 18))
+        self.btn_reset.setToolTip("Reset timer")
         self.btn_reset.setStyleSheet("""
             QPushButton {
                 background: transparent;

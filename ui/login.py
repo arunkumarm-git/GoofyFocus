@@ -30,9 +30,9 @@ class LoginDialog(QDialog):
         self.setModal(True)
         
         self.shadow = QGraphicsDropShadowEffect(self)
-        self.shadow.setBlurRadius(35)
+        self.shadow.setBlurRadius(15)
         self.shadow.setColor(QColor(0, 0, 0, 160))
-        self.shadow.setOffset(0, 8)
+        self.shadow.setOffset(0, 3)
         self.setGraphicsEffect(self.shadow)
         
         self.user_info = None
@@ -65,14 +65,14 @@ class LoginDialog(QDialog):
         root.addLayout(tb)
 
         # Description
-        desc_title = QLabel("Sign in required")
+        desc_title = QLabel("Sync Focus Progress")
         desc_title.setFont(QFont("DM Sans", 14, QFont.Weight.Bold))
         desc_title.setStyleSheet(f"color: {TEXT_HI}; background: transparent;")
         root.addWidget(desc_title)
 
-        desc_body = QLabel("To proceed with the app, please log in with your Google account. This lets you sync your focus sessions, settings, and unlock pro features.")
+        desc_body = QLabel("Log in with your Google account to sync your focus sessions, settings, and track your stats across multiple devices. GoofyFocus is 100% free and all features are unlocked by default!")
         desc_body.setFont(QFont("DM Sans", 10))
-        desc_body.setStyleSheet(f"color: {TEXT_MID}; background: transparent;")
+        desc_body.setStyleSheet(f"color: {TEXT_MID}; background: transparent; line-height: 1.4;")
         desc_body.setWordWrap(True)
         root.addWidget(desc_body)
 
@@ -113,27 +113,6 @@ class LoginDialog(QDialog):
         self.btn_login.clicked.connect(self._do_login)
         root.addWidget(self.btn_login)
 
-        # Continue as Guest (Low friction startup option)
-        self.btn_guest = QPushButton("Continue as Guest")
-        self.btn_guest.setFixedHeight(28)
-        self.btn_guest.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_guest.setStyleSheet(f"""
-            QPushButton {{
-                background: transparent;
-                color: {TEXT_LOW};
-                border: none;
-                font-family: 'DM Sans', sans-serif;
-                font-size: 11px;
-                font-weight: 500;
-            }}
-            QPushButton:hover {{
-                color: {TEXT_HI};
-                text-decoration: underline;
-            }}
-        """)
-        self.btn_guest.clicked.connect(self.accept)
-        root.addWidget(self.btn_guest)
-
         # Status text
         self.status = QLabel("")
         self.status.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -170,7 +149,10 @@ class LoginDialog(QDialog):
 
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            if e.position().y() < 40:
+                self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            else:
+                super().mousePressEvent(e)
 
     def mouseMoveEvent(self, e):
         if e.buttons() == Qt.MouseButton.LeftButton and self._drag_pos:
@@ -178,6 +160,7 @@ class LoginDialog(QDialog):
 
     def mouseReleaseEvent(self, e):
         self._drag_pos = None
+        super().mouseReleaseEvent(e)
 
     def paintEvent(self, event):
         p = QPainter(self)

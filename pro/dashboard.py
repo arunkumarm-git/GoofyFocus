@@ -25,9 +25,11 @@ def generate_dashboard(user_info: dict):
     local_db = os.path.join(USER_DATA_DIR, "sessions.json")
     data = []
     
+    current_sub = user_info.get("id", "guest") if user_info else "guest"
     if os.path.exists(local_db):
         with open(local_db, "r") as f:
-            data = json.load(f)
+            all_data = json.load(f)
+        data = [r for r in all_data if r.get("google_sub", "guest") == current_sub]
     
     if not data:
         print("[dashboard] No data found to generate dashboard.")

@@ -35,7 +35,7 @@ from pro.stats import StatsWindow
 from pro.messages import CustomMessagesWindow
 from pro.media import GifPackManager, SoundManagerWindow
 
-CURRENT_VERSION = "1.0.6"
+CURRENT_VERSION = "1.0.7"
 
 
 # Helper to convert #AARRGGBB to rgba(r,g,b,a) for QSS stylesheets
@@ -904,8 +904,10 @@ class MainWindow(QWidget):
         self._overlay_closing = False
         self._drag_pos        = None
         self._muted           = False
+        self._is_quitting     = False
         self._user_info       = {}
-        self._is_pro          = False
+        self._is_pro          = True
+        self._has_donated     = False
         self._picker          = LocalAssetPicker()
         self._update_url      = None
         self.speech_bubble    = SpeechBubble(self)
@@ -1084,8 +1086,30 @@ class MainWindow(QWidget):
                 color: white;
             }}
         """)
-        btn_win_close.clicked.connect(self._quit_app)
+        btn_win_close.clicked.connect(self.close)
         
+        self.btn_top_donate = QPushButton("Support GoofyFocus 💖")
+        self.btn_top_donate.setFixedHeight(22)
+        self.btn_top_donate.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_top_donate.clicked.connect(self._show_upgrade_dialog)
+        self.btn_top_donate.setStyleSheet(f"""
+            QPushButton {{
+                background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 {ACCENT}, stop:1 {ACCENT_2});
+                color: white;
+                border: none;
+                border-radius: 11px;
+                padding: 0 12px;
+                font-size: 10px;
+                font-family: 'DM Sans';
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #ff8da1, stop:1 #bfa3ff);
+            }}
+        """)
+        
+        top_bar_lay.addWidget(self.btn_top_donate)
+        top_bar_lay.addSpacing(10)
         top_bar_lay.addWidget(btn_win_min)
         top_bar_lay.addWidget(btn_win_max)
         top_bar_lay.addWidget(btn_win_close)
@@ -1268,12 +1292,15 @@ class MainWindow(QWidget):
         settings_title = _lbl("Settings", size=18, color=TEXT_HI, bold=True)
         settings_header.addWidget(settings_title)
         
-        self.settings_pro_badge = QLabel("✦ pro")
+        self.settings_pro_badge = QPushButton("✦ pro")
         self.settings_pro_badge.setStyleSheet(
-            f"color:{ACCENT};font-size:9px;font-family:'DM Sans';"
+            f"QPushButton {{ color:{ACCENT};font-size:9px;font-family:'DM Sans';"
             f"background:{ACCENT_DIM};border:1px solid {ACCENT_BDR};"
-            "border-radius:8px;padding:2px 6px;font-weight:600;"
+            "border-radius:8px;padding:2px 6px;font-weight:600; } "
+            f"QPushButton:hover {{ background:{hex_to_rgba(SURFACE_H)}; }}"
         )
+        self.settings_pro_badge.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.settings_pro_badge.clicked.connect(self._show_upgrade_dialog)
         settings_header.addWidget(self.settings_pro_badge)
         
         self.update_badge = QPushButton("Update Available ⏳")
@@ -1329,12 +1356,15 @@ class MainWindow(QWidget):
         anal_title = _lbl("Account & Feedback", size=18, color=TEXT_HI, bold=True)
         anal_header.addWidget(anal_title)
         
-        self.anal_pro_badge = QLabel("✦ pro")
+        self.anal_pro_badge = QPushButton("✦ pro")
         self.anal_pro_badge.setStyleSheet(
-            f"color:{ACCENT};font-size:9px;font-family:'DM Sans';"
+            f"QPushButton {{ color:{ACCENT};font-size:9px;font-family:'DM Sans';"
             f"background:{ACCENT_DIM};border:1px solid {ACCENT_BDR};"
-            "border-radius:8px;padding:2px 6px;font-weight:600;"
+            "border-radius:8px;padding:2px 6px;font-weight:600; } "
+            f"QPushButton:hover {{ background:{hex_to_rgba(SURFACE_H)}; }}"
         )
+        self.anal_pro_badge.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.anal_pro_badge.clicked.connect(self._show_upgrade_dialog)
         anal_header.addWidget(self.anal_pro_badge)
         
         self.anal_update_badge = QPushButton("Update Available ⏳")
@@ -1513,6 +1543,7 @@ class MainWindow(QWidget):
         btn = QPushButton()
         btn.setFixedSize(50, 50)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setToolTip(text)
         
         lay = QVBoxLayout(btn)
         lay.setContentsMargins(0, 6, 0, 6)
@@ -1993,38 +2024,104 @@ class MainWindow(QWidget):
 
     # ── Pro / Auth ─────────────────────────────────────────────────────────────
     def _refresh_pro_badge(self):
-        is_pro = getattr(self, '_is_pro', False)
-        self.settings_pro_badge.setVisible(is_pro)
-        self.anal_pro_badge.setVisible(is_pro)
+        self._is_pro = True
+        has_donated = getattr(self, '_has_donated', False)
+        
+        if has_donated:
+            badge_text = "✦ supporter 💖"
+            badge_style = f"""
+                QPushButton {{
+                    color: #FCD34D;
+                    font-size: 9px;
+                    font-family: 'DM Sans';
+                    background: rgba(252, 211, 77, 20);
+                    border: 1px solid rgba(252, 211, 77, 50);
+                    border-radius: 8px;
+                    padding: 2px 8px;
+                    font-weight: 600;
+                }}
+                QPushButton:hover {{
+                    background: rgba(252, 211, 77, 40);
+                }}
+            """
+            if hasattr(self, 'btn_top_donate'):
+                self.btn_top_donate.setText("Thank You for Supporting! 💖")
+                self.btn_top_donate.setStyleSheet(f"""
+                    QPushButton {{
+                        background: rgba(252, 211, 77, 20);
+                        border: 1px solid rgba(252, 211, 77, 50);
+                        color: #FCD34D;
+                        border-radius: 11px;
+                        padding: 0 12px;
+                        font-size: 10px;
+                        font-family: 'DM Sans';
+                        font-weight: bold;
+                    }}
+                    QPushButton:hover {{
+                        background: rgba(252, 211, 77, 40);
+                    }}
+                """)
+        else:
+            badge_text = "✦ donate 💖"
+            badge_style = f"""
+                QPushButton {{
+                    color: {ACCENT};
+                    font-size: 9px;
+                    font-family: 'DM Sans';
+                    background: {ACCENT_DIM};
+                    border: 1px solid {ACCENT_BDR};
+                    border-radius: 8px;
+                    padding: 2px 8px;
+                    font-weight: 600;
+                }}
+                QPushButton:hover {{
+                    background: rgba(251, 113, 133, 60);
+                }}
+            """
+            if hasattr(self, 'btn_top_donate'):
+                self.btn_top_donate.setText("Support GoofyFocus 💖")
+                self.btn_top_donate.setStyleSheet(f"""
+                    QPushButton {{
+                        background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 {ACCENT}, stop:1 {ACCENT_2});
+                        color: white;
+                        border: none;
+                        border-radius: 11px;
+                        padding: 0 12px;
+                        font-size: 10px;
+                        font-family: 'DM Sans';
+                        font-weight: bold;
+                    }}
+                    QPushButton:hover {{
+                        background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #ff8da1, stop:1 #bfa3ff);
+                    }}
+                """)
+            
+        self.settings_pro_badge.setText(badge_text)
+        self.settings_pro_badge.setStyleSheet(badge_style)
+        self.anal_pro_badge.setText(badge_text)
+        self.anal_pro_badge.setStyleSheet(badge_style)
         
         # Configure self._spc_spin style and focus policy based on pro status
-        self._spc_spin.setFocusPolicy(Qt.FocusPolicy.StrongFocus if is_pro else Qt.FocusPolicy.NoFocus)
-        if is_pro:
-            self._spc_spin.setStyleSheet(
-                f"QSpinBox{{background:rgba(255,255,255,13);border:1px solid rgba(255,255,255,31);"
-                f"border-radius:8px;padding:4px 6px;color:{TEXT_HI};font-size:11px;font-weight:400;}}"
-                f"QSpinBox:focus{{border-color:{ACCENT};}}"
-                "QSpinBox::up-button,QSpinBox::down-button{width:0px;border:none;}"
-            )
-        else:
-            self._spc_spin.setStyleSheet(
-                f"QSpinBox{{background:rgba(255,255,255,8);border:1px solid rgba(255,255,255,15);"
-                f"border-radius:8px;padding:4px 6px;color:{TEXT_LOW};font-size:11px;font-weight:400;}}"
-                "QSpinBox::up-button,QSpinBox::down-button{width:0px;border:none;}"
-            )
+        self._spc_spin.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._spc_spin.setStyleSheet(
+            f"QSpinBox{{background:rgba(255,255,255,13);border:1px solid rgba(255,255,255,31);"
+            f"border-radius:8px;padding:4px 6px;color:{TEXT_HI};font-size:11px;font-weight:400;}}"
+            f"QSpinBox:focus{{border-color:{ACCENT};}}"
+            "QSpinBox::up-button,QSpinBox::down-button{width:0px;border:none;}"
+        )
         
-        self._spc_lock.setVisible(not is_pro)
+        self._spc_lock.setVisible(False)
         
         if hasattr(self, '_msgs_lock'):
-            self._msgs_lock.setVisible(not is_pro)
+            self._msgs_lock.setVisible(False)
         if hasattr(self, '_gifs_lock'):
-            self._gifs_lock.setVisible(not is_pro)
+            self._gifs_lock.setVisible(False)
         if hasattr(self, '_sounds_lock'):
-            self._sounds_lock.setVisible(not is_pro)
+            self._sounds_lock.setVisible(False)
         
         # Sync stats widget
         if hasattr(self, 'stats_widget'):
-            self.stats_widget._is_pro = is_pro
+            self.stats_widget._is_pro = True
             self.stats_widget._load_stats()
 
     def _show_stats(self):
@@ -2069,7 +2166,8 @@ class MainWindow(QWidget):
         info = load_cached_user()
         if info:
             self._user_info = info
-            self._is_pro    = info.get("is_pro", False)
+            self._is_pro    = True
+            self._has_donated = info.get("has_donated", False)
             self._refresh_pro_badge()
             self._set_login_state(info)
             self._sync_pro_status()
@@ -2079,7 +2177,8 @@ class MainWindow(QWidget):
         if login_dlg.exec() == LoginDialog.DialogCode.Accepted:
             info = login_dlg.user_info
             self._user_info = info
-            self._is_pro = info.get("is_pro", False)
+            self._is_pro = True
+            self._has_donated = info.get("has_donated", False)
             self._refresh_pro_badge()
             self._set_login_state(info)
             self._load_settings()
@@ -2133,11 +2232,12 @@ class MainWindow(QWidget):
         if email:
             lbl = QAction(email, self); lbl.setEnabled(False)
             menu.addAction(lbl); menu.addSeparator()
-        if not self._is_pro:
-            act_up  = QAction("upgrade to pro ✦", self)
-            act_up.triggered.connect(self._show_upgrade_dialog)
-            menu.addAction(act_up)
-            menu.addSeparator()
+        
+        act_up  = QAction("Donate / Support 💖", self)
+        act_up.triggered.connect(self._show_upgrade_dialog)
+        menu.addAction(act_up)
+        menu.addSeparator()
+        
         act_fb  = QAction("send feedback", self);     act_fb.triggered.connect(self._open_feedback)
         act_out = QAction("log out", self);           act_out.triggered.connect(self._do_logout)
         menu.addAction(act_fb)
@@ -2148,7 +2248,8 @@ class MainWindow(QWidget):
     def _do_logout(self):
         logout_user()
         self._user_info = {}
-        self._is_pro    = False
+        self._is_pro    = True
+        self._has_donated = False
         self._refresh_pro_badge()
         self.btn_sync_profile.setVisible(False)
         
@@ -2182,33 +2283,11 @@ class MainWindow(QWidget):
         except Exception:
             pass
         self.btn_auth_page.clicked.connect(self._do_google_login)
-        
-        # Hide the main window and show LoginDialog
-        self.hide()
-        login_dlg = LoginDialog()
-        login_dlg.exec()
-        
-        # Check if they logged in during the dialog
-        from auth import load_cached_user
-        info = load_cached_user()
-        if info:
-            self._user_info = info
-            self._is_pro = info.get("is_pro", False)
-            self._refresh_pro_badge()
-            self._set_login_state(info)
-        else:
-            self._user_info = {}
-            self._is_pro = False
-            self._refresh_pro_badge()
-            self.btn_avatar.set_user({})
-            self.btn_avatar.setToolTip("Sign in to sync focus sessions")
-            self._update_mascot()
-            
         self._load_settings()
-        self.show()
+        self._update_mascot()
 
     def _sync_pro_status(self):
-        """Asynchronously check user's Pro status from Supabase to sync purchase status."""
+        """Asynchronously check user's donation status from Supabase."""
         sub = self._user_info.get("id") if self._user_info else None
         if not sub:
             return
@@ -2219,21 +2298,21 @@ class MainWindow(QWidget):
             if not sb:
                 return
             try:
-                result = sb.table("users").select("is_pro").eq("google_sub", sub).execute()
+                result = sb.table("users").select("has_donated").eq("google_sub", sub).execute()
                 rows = result.data
                 if rows:
-                    db_is_pro = rows[0].get("is_pro", False)
-                    QTimer.singleShot(0, lambda: self._apply_synced_pro_status(db_is_pro))
+                    db_has_donated = rows[0].get("has_donated", False)
+                    QTimer.singleShot(0, lambda: self._apply_synced_donation_status(db_has_donated))
             except Exception as e:
-                print(f"[sync_pro] Failed: {e}")
+                print(f"[sync_donation] Failed: {e}")
                 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _apply_synced_pro_status(self, db_is_pro: bool):
-        if self._user_info and self._user_info.get("is_pro") != db_is_pro:
-            print(f"[sync_pro] Pro status updated from DB: {db_is_pro}")
-            self._user_info["is_pro"] = db_is_pro
-            self._is_pro = db_is_pro
+    def _apply_synced_donation_status(self, db_has_donated: bool):
+        if self._user_info and self._user_info.get("has_donated") != db_has_donated:
+            print(f"[sync_donation] Donation status updated from DB: {db_has_donated}")
+            self._user_info["has_donated"] = db_has_donated
+            self._has_donated = db_has_donated
             save_cached_user(self._user_info)
             self._refresh_pro_badge()
 
@@ -2254,22 +2333,22 @@ class MainWindow(QWidget):
             return
             
         try:
-            result = sb.table("users").select("is_pro").eq("google_sub", sub).execute()
+            result = sb.table("users").select("has_donated").eq("google_sub", sub).execute()
             rows = result.data
             if rows:
-                db_is_pro = rows[0].get("is_pro", False)
-                self._user_info["is_pro"] = db_is_pro
-                self._is_pro = db_is_pro
+                db_has_donated = rows[0].get("has_donated", False)
+                self._user_info["has_donated"] = db_has_donated
+                self._has_donated = db_has_donated
                 save_cached_user(self._user_info)
                 self._refresh_pro_badge()
                 
                 # Update stats widget if it exists
                 if hasattr(self, 'stats_widget'):
-                    self.stats_widget._is_pro = db_is_pro
+                    self.stats_widget._is_pro = True
                     self.stats_widget._load_stats()
                 
-                if db_is_pro:
-                    self._set_status("pro synced ✓", GREEN)
+                if db_has_donated:
+                    self._set_status("supporter synced ✓", GREEN)
                 else:
                     self._set_status("synced ✓", GREEN)
             else:
@@ -2296,8 +2375,11 @@ class MainWindow(QWidget):
         self.showNormal(); self.activateWindow(); self.raise_()
 
     def _tray_activated(self, reason):
-        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
-            self._show_from_tray()
+        if reason in (QSystemTrayIcon.ActivationReason.Trigger, QSystemTrayIcon.ActivationReason.DoubleClick):
+            if self.isVisible():
+                self.hide()
+            else:
+                self._show_from_tray()
 
     def _on_tray_message_clicked(self):
         if self._update_url:
@@ -2456,7 +2538,16 @@ del "%~f0"
 
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            if e.position().y() < 45:
+                self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            else:
+                super().mousePressEvent(e)
+
+    def mouseDoubleClickEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton and e.position().y() < 45:
+            self._toggle_maximized()
+        else:
+            super().mouseDoubleClickEvent(e)
 
     def mouseMoveEvent(self, e):
         if e.buttons() == Qt.MouseButton.LeftButton and self._drag_pos:
@@ -2467,7 +2558,9 @@ del "%~f0"
                 pos = mascot_pos + QPoint(10, -16)
                 self.speech_bubble.reposition(pos)
 
-    def mouseReleaseEvent(self, e): self._drag_pos = None
+    def mouseReleaseEvent(self, e):
+        self._drag_pos = None
+        super().mouseReleaseEvent(e)
 
     def changeEvent(self, event):
         if event.type() == QEvent.Type.WindowStateChange:
@@ -2489,17 +2582,38 @@ del "%~f0"
             print("[blur] showEvent failed to apply blur:", e)
 
     def _quit_app(self):
+        self._is_quitting = True
         self._close_overlay_safely()
         self.tray.hide()
         QApplication.quit()
         sys.exit(0)
 
     def closeEvent(self, event):
-        self._close_overlay_safely()
-        self.tray.hide()
-        event.accept()
-        QApplication.quit()
-        sys.exit(0)
+        if getattr(self, '_is_quitting', False):
+            self._close_overlay_safely()
+            self.tray.hide()
+            event.accept()
+        else:
+            event.ignore()
+            self._minimize_to_tray()
+
+    def keyPressEvent(self, event):
+        # Jakob's Law: Spacebar play/pause shortcut (standard for media players/timers)
+        # Avoid triggering it if the user is typing in a text/input widget
+        focused = self.focusWidget()
+        from PyQt6.QtWidgets import QLineEdit, QTextEdit, QSpinBox, QComboBox
+        if isinstance(focused, (QLineEdit, QTextEdit, QSpinBox, QComboBox)):
+            super().keyPressEvent(event)
+            return
+
+        if event.key() == Qt.Key.Key_Space:
+            if self.controller.is_running:
+                self._ui_pause()
+            else:
+                self._ui_start()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
 
     # ── Paint ──────────────────────────────────────────────────────────────────
     def paintEvent(self, event):
@@ -2567,11 +2681,8 @@ def main():
     if os.path.exists(icon_path):
         app.setWindowIcon(QIcon(icon_path))
     from auth import load_cached_user
+    # Load cached user if they logged in previously, but do not block/prompt with LoginDialog if not logged in.
     cached_user = load_cached_user()
-    if not cached_user:
-        from ui.login import LoginDialog
-        login_dlg = LoginDialog()
-        login_dlg.exec()
             
     controller = TimerController()
     window     = MainWindow(controller)
