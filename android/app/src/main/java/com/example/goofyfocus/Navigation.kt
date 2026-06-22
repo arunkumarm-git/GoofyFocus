@@ -19,14 +19,16 @@ fun MainNavigation() {
   val backStack = rememberNavBackStack(Main)
 
   // Auto-navigate to BreakOverlay when triggered via MainActivity intent
-  LaunchedEffect(Unit) {
-    MainActivity.breakTrigger.collect { trigger ->
-      if (trigger) {
-        // Only navigate if we aren't already on the BreakOverlay screen
-        if (backStack.none { it is BreakOverlay }) {
-          backStack.add(BreakOverlay)
-        }
+  val context = androidx.compose.ui.platform.LocalContext.current
+  val activity = context as? MainActivity
+  
+  LaunchedEffect(activity?.launchBreakOverlay) {
+    if (activity?.launchBreakOverlay == true) {
+      // Only navigate if we aren't already on the BreakOverlay screen
+      if (backStack.none { it is BreakOverlay }) {
+        backStack.add(BreakOverlay)
       }
+      activity.consumeBreakOverlayTrigger()
     }
   }
 

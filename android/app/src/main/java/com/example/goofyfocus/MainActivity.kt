@@ -33,6 +33,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
 
+    var launchBreakOverlay by mutableStateOf(false)
+        private set
+
+    fun consumeBreakOverlayTrigger() {
+        launchBreakOverlay = false
+    }
+
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -147,7 +154,8 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         if (intent != null && intent.getBooleanExtra("LAUNCH_BREAK_OVERLAY", false)) {
-            breakTrigger.tryEmit(true)
+            launchBreakOverlay = true
+            intent.removeExtra("LAUNCH_BREAK_OVERLAY")
         }
     }
 
