@@ -176,8 +176,7 @@ class TimerService : Service() {
             this, 
             1002, 
             intent, 
-            flags, 
-            options?.toBundle()
+            flags
         )
         
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
