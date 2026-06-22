@@ -3,6 +3,7 @@ package com.example.goofyfocus
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -10,12 +11,25 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.core.content.ContextCompat
 import com.example.goofyfocus.theme.GoofyFocusTheme
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
 
@@ -27,6 +41,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        hasOverlayPermission.value = android.provider.Settings.canDrawOverlays(this)
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
@@ -49,10 +65,78 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
+                    val hasPermission by hasOverlayPermission.collectAsState()
+                    var showDialog by remember { mutableStateOf(false) }
+                    var dismissedStartupPrompt by remember { mutableStateOf(false) }
+                    
+                    LaunchedEffect(hasPermission, dismissedStartupPrompt) {
+                        showDialog = !hasPermission && !dismissedStartupPrompt
+                    }
+                    
                     MainNavigation()
+                    
+                    if (showDialog) {
+                        AlertDialog(
+                            onDismissRequest = {
+                                showDialog = false
+                                dismissedStartupPrompt = true
+                            },
+                            title = { Text("Display Over Other Apps ⚠️", fontWeight = FontWeight.Bold) },
+                            text = {
+                                Text("GoofyFocus needs permission to draw over other apps to display the break overlay screen immediately when your work timer expires. This helps you stay disciplined and take breaks on time!")
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        showDialog = false
+                                        try {
+                                            val intent = Intent(
+                                                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                                Uri.parse("package:${packageName}")
+                                            )
+                                            startActivity(intent)
+                                        } catch (e: Exception) {
+                                            try {
+                                                val intent = Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                                                startActivity(intent)
+                                            } catch (ex: Exception) {}
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFFFB7185),
+                                        contentColor = Color.White
+                                    )
+                                ) {
+                                    Text("Grant Permission")
+                                }
+                            },
+                            dismissButton = {
+                                Button(
+                                    onClick = {
+                                        showDialog = false
+                                        dismissedStartupPrompt = true
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0x1EFFFFFF),
+                                        contentColor = Color.White
+                                    )
+                                ) {
+                                    Text("Not Now")
+                                }
+                            },
+                            containerColor = Color(0xFF171415),
+                            titleContentColor = Color.White,
+                            textContentColor = Color(0xB3FFFFFF)
+                        )
+                    }
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        hasOverlayPermission.value = android.provider.Settings.canDrawOverlays(this)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -81,5 +165,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         val breakTrigger = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
+        val hasOverlayPermission = MutableStateFlow(true)
     }
 }

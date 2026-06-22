@@ -292,19 +292,7 @@ fun SettingsScreen(
             }
 
             // Overlay Permission Warning (if not granted under Jakob's Law)
-            val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-            var hasOverlayPermission by remember { mutableStateOf(true) }
-            DisposableEffect(lifecycleOwner) {
-                val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-                    if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                        hasOverlayPermission = android.provider.Settings.canDrawOverlays(context)
-                    }
-                }
-                lifecycleOwner.lifecycle.addObserver(observer)
-                onDispose {
-                    lifecycleOwner.lifecycle.removeObserver(observer)
-                }
-            }
+            val hasOverlayPermission by com.example.goofyfocus.MainActivity.hasOverlayPermission.collectAsState()
             if (!hasOverlayPermission) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0x1EFBBF24)), // Amber translucent warning
