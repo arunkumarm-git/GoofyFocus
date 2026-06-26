@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "273673378220",
+    "project_id": "goofyfocus-b8303",
+    "storage_bucket": "goofyfocus-b8303.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:273673378220:android:242dd66fb673a338780209",
+        "android_client_info": {
+          "package_name": "com.arunkumar.goofyfocus"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "273673378220-daikmf5m01m5c0tunif1n66pfrovrpk6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.arunkumar.goofyfocus",
+            "certificate_hash": "d1a1956596c23bc08c24f691364403c28438dbf2"
+          }
+        },
+        {
+          "client_id": "273673378220-u22ot6dftngbv3s77p1kpumvfomqvcv8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.arunkumar.goofyfocus",
+            "certificate_hash": "fd52807a7c86175795f51f7310c682d8a361cca1"
+          }
+        },
+        {
+          "client_id": "273673378220-1k4v98uu1lq43ji9635h2n7cepakjjde.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBgNBpbLixMeCVX3SReO2gXwGfqsybx5n4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "273673378220-1k4v98uu1lq43ji9635h2n7cepakjjde.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
