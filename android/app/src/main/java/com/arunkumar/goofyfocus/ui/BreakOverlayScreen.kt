@@ -43,7 +43,8 @@ fun BreakOverlayScreen(
     val mascotType by TimerService.mascotType.collectAsState()
 
     // Sound state
-    var isMuted by remember { mutableStateOf(false) }
+    val isBreakSoundEnabled by TimerService.isBreakSoundEnabled.collectAsState()
+    var isMuted by remember { mutableStateOf(!TimerService.isBreakSoundEnabled.value) }
     val mediaPlayerState = remember { mutableStateOf<MediaPlayer?>(null) }
 
     // If phase changes back to Work, automatically dismiss the break screen
@@ -108,8 +109,8 @@ fun BreakOverlayScreen(
     }
 
     // Audio playback logic (plays random sound from assets)
-    LaunchedEffect(isMuted) {
-        if (isMuted) {
+    LaunchedEffect(isMuted, isBreakSoundEnabled) {
+        if (isMuted || !isBreakSoundEnabled) {
             mediaPlayerState.value?.stop()
             mediaPlayerState.value?.release()
             mediaPlayerState.value = null
@@ -231,14 +232,16 @@ fun BreakOverlayScreen(
                     modifier = Modifier.size(75.dp)
                 )
                 Column(modifier = Modifier.weight(1f)) {
+                    val lastSessionEarnedXp by TimerService.lastSessionEarnedXp.collectAsState()
                     Text(
-                        text = "Session Completed! 🎉",
+                        text = if (lastSessionEarnedXp) "Session Completed! 🎉" else "Break Started! ☕",
                         color = Color.White,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "You earned +20 XP! Great job focusing. Let's recharge!",
+                        text = if (lastSessionEarnedXp) "You earned +20 XP! Great job focusing. Let's recharge!"
+                               else "Great job focusing. Let's recharge!",
                         color = Color(0xB3FFFFFF),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Normal
@@ -248,8 +251,9 @@ fun BreakOverlayScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            val isBreakGifEnabled by TimerService.isBreakGifEnabled.collectAsState()
             // Display break GIF
-            if (selectedGifPath != null) {
+            if (isBreakGifEnabled && selectedGifPath != null) {
                 GifImage(
                     gifUri = selectedGifPath,
                     modifier = Modifier

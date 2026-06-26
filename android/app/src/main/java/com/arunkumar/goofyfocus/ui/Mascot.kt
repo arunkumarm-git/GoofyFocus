@@ -226,6 +226,39 @@ fun ProceduralMascot(
         ),
         label = "mascot_bounce"
     )
+
+    // Spin/Wobble rotation state
+    var tapRotationTarget by remember { mutableStateOf(0f) }
+    val rotationAnim by animateFloatAsState(
+        targetValue = tapRotationTarget,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "mascot_rotation"
+    )
+
+    // Random ear twitch offsets
+    var leftEarTwitch by remember { mutableStateOf(0f) }
+    var rightEarTwitch by remember { mutableStateOf(0f) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(kotlin.random.Random.nextLong(3000, 7000))
+            if (kotlin.random.Random.nextBoolean()) {
+                leftEarTwitch = -12f
+                delay(100)
+                leftEarTwitch = 8f
+                delay(80)
+                leftEarTwitch = 0f
+            } else {
+                rightEarTwitch = 12f
+                delay(100)
+                rightEarTwitch = -8f
+                delay(80)
+                rightEarTwitch = 0f
+            }
+        }
+    }
     
     // Spark list for the local particle engine
     val sparks = remember { mutableStateListOf<MascotSpark>() }
@@ -313,17 +346,23 @@ fun ProceduralMascot(
 
     Canvas(
         modifier = modifier
-            .graphicsLayer(scaleX = scale, scaleY = scale)
+            .graphicsLayer(
+                scaleX = scale,
+                scaleY = scale,
+                rotationZ = rotationAnim
+            )
             .clickable {
-                // Trigger physical bounce animation
+                // Trigger physical bounce and barrel spin animation
                 coroutineScope.launch {
                     isTapped = true
+                    tapRotationTarget += 360f
                     delay(80)
                     isTapped = false
                 }
                 
-                // Spawn 10 spark particles
+                // Spawn 12 spark particles including music notes & sparkles
                 val colors = listOf(Color(0xFFFB7185), Color(0xFFA78BFA), Color(0xFFFCD34D), Color(0xFF60A5FA))
+                val particleTypes = listOf(0, 1, 2, 4, 5) // Star, Heart, Dot, Music Note, Sparkle
                 for (i in 0 until 12) {
                     val angle = (kotlin.random.Random.nextFloat() * 2 * Math.PI).toFloat()
                     val speed = kotlin.random.Random.nextFloat() * 1.5f + 0.5f
@@ -337,7 +376,7 @@ fun ProceduralMascot(
                             color = colors.random(),
                             maxLife = 60,
                             life = 60,
-                            type = kotlin.random.Random.nextInt(3) // Star, Heart, Dot
+                            type = particleTypes.random()
                         )
                     )
                 }
@@ -407,7 +446,7 @@ fun ProceduralMascot(
             }
 
             // Draw Ears
-            val leftEarSway = 5f * sin(animFrame)
+            val leftEarSway = 5f * sin(animFrame) + leftEarTwitch
             val leftEar = Path().apply {
                 moveTo(cx - r * 0.8f, cy - r * 0.4f)
                 lineTo(cx - r * 0.9f - leftEarSway, cy - r * 1.1f + leftEarSway * 0.5f)
@@ -416,7 +455,7 @@ fun ProceduralMascot(
             }
             drawPath(leftEar, brush = bodyBrush)
 
-            val rightEarSway = 5f * sin(animFrame + 1.5f)
+            val rightEarSway = 5f * sin(animFrame + 1.5f) + rightEarTwitch
             val rightEar = Path().apply {
                 moveTo(cx + r * 0.8f, cy - r * 0.4f)
                 lineTo(cx + r * 0.9f + rightEarSway, cy - r * 1.1f + rightEarSway * 0.5f)
@@ -424,6 +463,22 @@ fun ProceduralMascot(
                 close()
             }
             drawPath(rightEar, brush = bodyBrush)
+
+            // Draw Cat Tail (Wagging behind body)
+            val tailSway = (if (expression == MascotExpression.CELEBRATING) 25f else 10f) * sin(animFrame * 2f)
+            val tailPath = Path().apply {
+                moveTo(cx + r * 0.5f, cy + r * 0.6f)
+                cubicTo(
+                    cx + r * 0.9f + tailSway, cy + r * 0.5f - tailSway * 0.3f,
+                    cx + r * 1.2f + tailSway, cy - r * 0.1f + tailSway,
+                    cx + r * 1.0f + tailSway * 0.8f, cy - r * 0.4f
+                )
+            }
+            drawPath(
+                path = tailPath,
+                brush = bodyBrush,
+                style = Stroke(width = 8.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            )
 
             // Draw Body Circle
             drawCircle(brush = bodyBrush, radius = r, center = Offset(cx, cy))
@@ -597,7 +652,7 @@ fun ProceduralMascot(
             }
 
             // Left Floppy Ear
-            val leftEarSway = 4f * sin(animFrame)
+            val leftEarSway = 4f * sin(animFrame) + leftEarTwitch
             val leftEar = Path().apply {
                 moveTo(cx - r * 0.7f, cy - r * 0.3f)
                 cubicTo(
@@ -610,7 +665,7 @@ fun ProceduralMascot(
             drawPath(leftEar, brush = bodyBrush)
 
             // Right Floppy Ear
-            val rightEarSway = 4f * sin(animFrame + 1.5f)
+            val rightEarSway = 4f * sin(animFrame + 1.5f) + rightEarTwitch
             val rightEar = Path().apply {
                 moveTo(cx + r * 0.7f, cy - r * 0.3f)
                 cubicTo(
@@ -621,6 +676,22 @@ fun ProceduralMascot(
                 close()
             }
             drawPath(rightEar, brush = bodyBrush)
+
+            // Draw Dog Tail (Wagging behind body)
+            val tailSway = (if (expression == MascotExpression.CELEBRATING) 30f else 12f) * sin(animFrame * 2.5f)
+            val tailPath = Path().apply {
+                moveTo(cx - r * 0.5f, cy + r * 0.6f)
+                cubicTo(
+                    cx - r * 0.9f - tailSway, cy + r * 0.5f - tailSway * 0.3f,
+                    cx - r * 1.2f - tailSway, cy - r * 0.1f + tailSway,
+                    cx - r * 1.0f - tailSway * 0.8f, cy - r * 0.4f
+                )
+            }
+            drawPath(
+                path = tailPath,
+                brush = bodyBrush,
+                style = Stroke(width = 10.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            )
 
             // Dog Body Circle
             drawCircle(brush = bodyBrush, radius = r, center = Offset(cx, cy))
@@ -776,6 +847,36 @@ fun ProceduralMascot(
                         lineTo(sx + zW / 2, sy + zH / 2)
                     }
                     drawPath(zPath, color = zColor, style = Stroke(width = 1.5.dp.toPx()))
+                }
+                4 -> {
+                    // Draw Music Note
+                    val stemW = 1.5.dp.toPx()
+                    val headR = sizePx * 0.4f
+                    drawCircle(alphaColor, radius = headR, center = Offset(sx - sizePx * 0.2f, sy + sizePx * 0.3f))
+                    drawLine(
+                        color = alphaColor,
+                        start = Offset(sx - sizePx * 0.2f + headR, sy + sizePx * 0.3f),
+                        end = Offset(sx - sizePx * 0.2f + headR, sy - sizePx * 0.4f),
+                        strokeWidth = stemW
+                    )
+                    drawLine(
+                        color = alphaColor,
+                        start = Offset(sx - sizePx * 0.2f + headR, sy - sizePx * 0.4f),
+                        end = Offset(sx + sizePx * 0.3f, sy - sizePx * 0.2f),
+                        strokeWidth = stemW
+                    )
+                }
+                5 -> {
+                    // Draw Sparkle (Procedural 4-point sparkle)
+                    val sparklePath = Path().apply {
+                        moveTo(sx, sy - sizePx)
+                        quadraticTo(sx, sy, sx + sizePx, sy)
+                        quadraticTo(sx, sy, sx, sy + sizePx)
+                        quadraticTo(sx, sy, sx - sizePx, sy)
+                        quadraticTo(sx, sy, sx, sy - sizePx)
+                        close()
+                    }
+                    drawPath(sparklePath, alphaColor)
                 }
             }
         }

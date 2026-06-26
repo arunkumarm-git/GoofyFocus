@@ -148,6 +148,9 @@ object SoundSynthesizer {
     fun getPlayingType(): String? = currentType
 
     fun playClickSound() {
+        if (!com.arunkumar.goofyfocus.TimerService.isClickSoundEnabled.value) {
+            return
+        }
         Thread {
             val sampleRate = 22050
             val numSamples = (0.05 * sampleRate).toInt() // 50ms

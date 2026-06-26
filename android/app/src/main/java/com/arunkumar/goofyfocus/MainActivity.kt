@@ -39,9 +39,15 @@ import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import com.google.firebase.Firebase
 import com.google.firebase.analytics.analytics
 import com.google.firebase.crashlytics.crashlytics
+import com.arunkumar.goofyfocus.billing.BillingManager
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 
 class MainActivity : ComponentActivity() {
+ 
+    lateinit var billingManager: BillingManager
+        private set
 
     var launchBreakOverlay by mutableStateOf(false)
         private set
@@ -56,8 +62,44 @@ class MainActivity : ComponentActivity() {
         // Notification permission granted or denied
     }
 
+    private fun handlePurchaseCompleted(productId: String) {
+        val sub = TimerService.googleUserSub.value
+        if (sub == null || sub == "guest") {
+            android.util.Log.w("MainActivity", "onPurchaseCompleted called but user is not logged in. Ignoring to prevent guest account credentialing.")
+            return
+        }
+        val addedHours = when (productId) {
+            "goofyfocus_1month" -> 744 // 31 days
+            "goofyfocus_6months" -> 4464
+            "goofyfocus_1year" -> 8928
+            else -> 0
+        }
+        if (addedHours > 0) {
+            lifecycleScope.launch {
+                val email = TimerService.googleUserEmail.value ?: "guest"
+                val name = TimerService.googleUserName.value
+                val pic = TimerService.googleUserPicture.value
+                val newHours = TimerService.premiumHours.value + addedHours
+                val success = TimerService.syncUserToSupabase(sub, email, name, pic, true, newHours)
+                if (success) {
+                    TimerService.signInUserWithHours(applicationContext, sub, email, name, pic, newHours, System.currentTimeMillis())
+                    com.arunkumar.goofyfocus.audio.SoundSynthesizer.playSuccessSound()
+                    android.widget.Toast.makeText(applicationContext, "Subscription activated & synced to cloud! 🎉", android.widget.Toast.LENGTH_LONG).show()
+                } else {
+                    android.widget.Toast.makeText(applicationContext, "Cloud sync failed. Local premium activated.", android.widget.Toast.LENGTH_LONG).show()
+                    TimerService.signInUserWithHours(applicationContext, sub, email, name, pic, newHours, System.currentTimeMillis())
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Initialize BillingManager
+        billingManager = BillingManager(applicationContext, lifecycleScope) { productId ->
+            handlePurchaseCompleted(productId)
+        }
         
         hasOverlayPermission.value = android.provider.Settings.canDrawOverlays(this)
         

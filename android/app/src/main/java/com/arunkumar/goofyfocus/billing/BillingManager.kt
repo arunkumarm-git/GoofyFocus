@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.arunkumar.goofyfocus.TimerService
 
 class BillingManager(
     private val context: Context,
@@ -123,6 +124,12 @@ class BillingManager(
 
                     val billingFlowParams = BillingFlowParams.newBuilder()
                         .setProductDetailsParamsList(productDetailsParamsList)
+                        .apply {
+                            val sub = TimerService.googleUserSub.value
+                            if (sub != null && sub != "guest") {
+                                setObfuscatedAccountId(sub)
+                            }
+                        }
                         .build()
 
                     android.util.Log.i("BillingManager", "Launching Google Play Billing flow for $productId")
@@ -167,9 +174,28 @@ class BillingManager(
 
     private fun handlePurchase(purchase: Purchase) {
         android.util.Log.d("BillingManager", "handlePurchase called for: ${purchase.orderId}, State: ${purchase.purchaseState}")
+        
+        // 1. Verify user ownership if obfuscatedAccountId is present
+        val purchaseSub = purchase.accountIdentifiers?.obfuscatedAccountId
+        val currentSub = TimerService.googleUserSub.value
+        if (purchaseSub != null && currentSub != null && purchaseSub != currentSub) {
+            android.util.Log.w("BillingManager", "Purchase belongs to a different user: $purchaseSub, current user is: $currentSub")
+            return
+        }
+
         if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+            // 2. Only credit and acknowledge if the purchase is NOT acknowledged yet
             if (!purchase.isAcknowledged) {
                 android.util.Log.d("BillingManager", "Acknowledging purchase: ${purchase.purchaseToken}")
+                
+                // Extra safeguard: check if we've already credited this orderId in this session
+                val prefs = context.getSharedPreferences("GoofyFocusPrefs", Context.MODE_PRIVATE)
+                val lastCreditedOrderId = prefs.getString("LAST_CREDITED_ORDER_ID", null)
+                if (purchase.orderId != null && purchase.orderId == lastCreditedOrderId) {
+                    android.util.Log.w("BillingManager", "Order ID ${purchase.orderId} already credited in this session.")
+                    return
+                }
+
                 val acknowledgePurchaseParams = AcknowledgePurchaseParams.newBuilder()
                     .setPurchaseToken(purchase.purchaseToken)
                     .build()
@@ -177,6 +203,12 @@ class BillingManager(
                 billingClient.acknowledgePurchase(acknowledgePurchaseParams) { billingResult ->
                     if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                         android.util.Log.i("BillingManager", "Purchase successfully acknowledged.")
+                        
+                        // Save last credited order ID to avoid double-crediting
+                        purchase.orderId?.let { orderId ->
+                            prefs.edit().putString("LAST_CREDITED_ORDER_ID", orderId).apply()
+                        }
+
                         coroutineScope.launch {
                             withContext(Dispatchers.Main) {
                                 onPurchaseCompleted(purchase.products.firstOrNull() ?: "")
@@ -187,12 +219,7 @@ class BillingManager(
                     }
                 }
             } else {
-                android.util.Log.d("BillingManager", "Purchase already acknowledged, updating status.")
-                coroutineScope.launch {
-                    withContext(Dispatchers.Main) {
-                        onPurchaseCompleted(purchase.products.firstOrNull() ?: "")
-                    }
-                }
+                android.util.Log.d("BillingManager", "Purchase ${purchase.orderId} is already acknowledged. Not crediting again.")
             }
         } else if (purchase.purchaseState == Purchase.PurchaseState.PENDING) {
             android.util.Log.d("BillingManager", "Purchase is pending payment.")

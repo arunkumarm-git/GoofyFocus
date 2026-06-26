@@ -71,9 +71,9 @@ fun MainScreen(
     val isPro by TimerService.isPro.collectAsStateWithLifecycle()
     val proExpiryTime by TimerService.proExpiryTime.collectAsStateWithLifecycle()
 
-    var selectedTab by remember { mutableIntStateOf(0) }
     val coroutineScope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { 3 })
+    val selectedTab = pagerState.currentPage
     var showLevelUpDialog by remember { mutableStateOf(false) }
     var levelUpTo by remember { mutableIntStateOf(1) }
 
@@ -97,8 +97,9 @@ fun MainScreen(
         if (savedStr.isNotEmpty()) {
             val loaded = savedStr.split(";;;").mapNotNull {
                 val parts = it.split("|||")
-                if (parts.size == 3) {
-                    TodoItem(parts[0], parts[1], parts[2].toBoolean())
+                if (parts.size >= 3) {
+                    val priority = if (parts.size >= 4) parts[3] else "Medium"
+                    TodoItem(parts[0], parts[1], parts[2].toBoolean(), priority)
                 } else null
             }
             todoItems.clear()
@@ -106,7 +107,7 @@ fun MainScreen(
         }
     }
     val saveTasks = { itemsList: List<TodoItem> ->
-        val savedStr = itemsList.joinToString(";;;") { "${it.id}|||${it.title}|||${it.isCompleted}" }
+        val savedStr = itemsList.joinToString(";;;") { "${it.id}|||${it.title}|||${it.isCompleted}|||${it.priority}" }
         prefs.edit().putString("TODO_LIST_ITEMS", savedStr).apply()
     }
 
@@ -222,7 +223,6 @@ fun MainScreen(
                                 .fillMaxHeight()
                                 .clickable {
                                     com.arunkumar.goofyfocus.audio.SoundSynthesizer.playClickSound()
-                                    selectedTab = index
                                     coroutineScope.launch {
                                         pagerState.animateScrollToPage(index)
                                     }
@@ -275,18 +275,6 @@ fun MainScreen(
                         center = Offset(size.width / 2, size.height * 0.4f)
                     )
                 }
-            }
-
-            // Foreground Layout switching by selected tab index
-
-            LaunchedEffect(selectedTab) {
-                if (pagerState.currentPage != selectedTab) {
-                    pagerState.animateScrollToPage(selectedTab)
-                }
-            }
-            
-            LaunchedEffect(pagerState.currentPage) {
-                selectedTab = pagerState.currentPage
             }
 
             HorizontalPager(
@@ -538,17 +526,47 @@ fun MainScreen(
                         Card(
                             colors = CardDefaults.cardColors(containerColor = Color(0x0CFFFFFF)),
                             shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(16.dp))
                         ) {
                             Column(
                                 modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Daily Progress", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    if (todoItems.any { it.isCompleted }) {
+                                        Text(
+                                            text = "Clear Completed 🧹",
+                                            color = accentPink,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.clickable {
+                                                com.arunkumar.goofyfocus.audio.SoundSynthesizer.playClickSound()
+                                                todoItems.removeIf { it.isCompleted }
+                                                saveTasks(todoItems)
+                                            }
+                                        )
+                                    }
+                                }
+                                
                                 Row(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text("Daily Progress", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    val motivationalText = when {
+                                        totalTasks == 0 -> "No goals yet. Let's create some! 💪"
+                                        completedTasks == 0 -> "Let's get started! You can do this! 🚀"
+                                        tasksProgress < 0.5f -> "Good start! Keep focusing! ⚡"
+                                        tasksProgress < 1.0f -> "Over halfway there! Excellent progress! 🔥"
+                                        else -> "All goals completed! Outstanding job! 🎉"
+                                    }
+                                    Text(motivationalText, color = Color(0x99FFFFFF), fontSize = 11.sp)
                                     Text("$completedTasks of $totalTasks finished", color = accentPink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                                 
@@ -563,57 +581,136 @@ fun MainScreen(
                                         modifier = Modifier
                                             .fillMaxHeight()
                                             .fillMaxWidth(tasksProgress)
-                                            .background(accentPink)
+                                            .background(
+                                                Brush.horizontalGradient(
+                                                    colors = listOf(accentPink, accentPurple)
+                                                )
+                                            )
                                     )
                                 }
                             }
                         }
                         
-                        // Add Task Input Row
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        // Add Task Form Card
+                        var newTaskTitle by remember { mutableStateOf("") }
+                        var selectedPriority by remember { mutableStateOf("Medium") }
+                        
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0x06FFFFFF)),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, Color(0x0DFFFFFF), RoundedCornerShape(16.dp))
                         ) {
-                            var newTaskTitle by remember { mutableStateOf("") }
-                            
-                            TextField(
-                                value = newTaskTitle,
-                                onValueChange = { newTaskTitle = it },
-                                placeholder = { Text("Add focus task...", color = Color(0x66FFFFFF), fontSize = 13.sp) },
-                                modifier = Modifier.weight(1f),
-                                singleLine = true,
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = Color(0x0DFFFFFF),
-                                    unfocusedContainerColor = Color(0x0DFFFFFF),
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedIndicatorColor = accentPink,
-                                    unfocusedIndicatorColor = Color.Transparent
-                                )
-                            )
-                            Button(
-                                onClick = {
-                                    com.arunkumar.goofyfocus.audio.SoundSynthesizer.playClickSound()
-                                    if (newTaskTitle.trim().isNotEmpty()) {
-                                        val newItem = TodoItem(
-                                            id = java.util.UUID.randomUUID().toString(),
-                                            title = newTaskTitle.trim(),
-                                            isCompleted = false
-                                        )
-                                        todoItems.add(newItem)
-                                        saveTasks(todoItems)
-                                        newTaskTitle = ""
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = accentPink),
-                                shape = RoundedCornerShape(8.dp)
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Text("Add", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("CREATE NEW GOAL", color = Color(0x80FFFFFF), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    TextField(
+                                        value = newTaskTitle,
+                                        onValueChange = { newTaskTitle = it },
+                                        placeholder = { Text("Add focus task...", color = Color(0x66FFFFFF), fontSize = 13.sp) },
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true,
+                                        colors = TextFieldDefaults.colors(
+                                            focusedContainerColor = Color(0x0DFFFFFF),
+                                            unfocusedContainerColor = Color(0x0DFFFFFF),
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White,
+                                            focusedIndicatorColor = accentPink,
+                                            unfocusedIndicatorColor = Color.Transparent
+                                        )
+                                    )
+                                    Button(
+                                        onClick = {
+                                            com.arunkumar.goofyfocus.audio.SoundSynthesizer.playClickSound()
+                                            if (newTaskTitle.trim().isNotEmpty()) {
+                                                val newItem = TodoItem(
+                                                    id = java.util.UUID.randomUUID().toString(),
+                                                    title = newTaskTitle.trim(),
+                                                    isCompleted = false,
+                                                    priority = selectedPriority
+                                                )
+                                                todoItems.add(newItem)
+                                                saveTasks(todoItems)
+                                                newTaskTitle = ""
+                                                selectedPriority = "Medium"
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = accentPink),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("Add", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    }
+                                }
+                                
+                                // Priority selector row
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    listOf("High", "Medium", "Low").forEach { p ->
+                                        val isSelected = selectedPriority == p
+                                        val chipColor = when (p) {
+                                            "High" -> Color(0xFFEF4444)
+                                            "Medium" -> Color(0xFFFBBF24)
+                                            else -> Color(0xFF10B981)
+                                        }
+                                        val bg = if (isSelected) chipColor.copy(alpha = 0.15f) else Color(0x06FFFFFF)
+                                        val borderCol = if (isSelected) chipColor else Color(0x10FFFFFF)
+                                        val textCol = if (isSelected) chipColor else Color(0x66FFFFFF)
+                                        
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(bg)
+                                                .border(1.dp, borderCol, RoundedCornerShape(8.dp))
+                                                .clickable {
+                                                    com.arunkumar.goofyfocus.audio.SoundSynthesizer.playClickSound()
+                                                    selectedPriority = p
+                                                }
+                                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                        ) {
+                                            Text(
+                                                text = when (p) {
+                                                    "High" -> "🔴 High"
+                                                    "Medium" -> "🟡 Medium"
+                                                    else -> "🟢 Low"
+                                                },
+                                                color = textCol,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                         
-                        // Tasks List
+                        // Tasks List Header
+                        if (todoItems.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                horizontalArrangement = Arrangement.Start
+                            ) {
+                                Text(
+                                    text = "ACTIVE GOALS",
+                                    color = Color(0x80FFFFFF),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                        }
+
+                        // Tasks List (Sorted: uncompleted High -> Medium -> Low, then completed)
                         if (todoItems.isEmpty()) {
                             Text(
                                 text = "No tasks yet. Stay productive! 🚀",
@@ -625,15 +722,27 @@ fun MainScreen(
                                     .padding(vertical = 40.dp)
                             )
                         } else {
+                            val sortedTasks = todoItems.sortedWith(
+                                compareBy<TodoItem> { it.isCompleted }
+                                    .thenByDescending {
+                                        when (it.priority) {
+                                            "High" -> 3
+                                            "Medium" -> 2
+                                            "Low" -> 1
+                                            else -> 2
+                                        }
+                                    }
+                            )
                             Column(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                todoItems.forEach { item ->
+                                sortedTasks.forEach { item ->
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .background(Color(0x0CFFFFFF), RoundedCornerShape(12.dp))
+                                            .border(1.dp, Color(0x0DFFFFFF), RoundedCornerShape(12.dp))
                                             .padding(horizontal = 12.dp, vertical = 6.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
@@ -660,6 +769,28 @@ fun MainScreen(
                                                     uncheckedColor = Color(0x66FFFFFF)
                                                 )
                                             )
+                                            
+                                            // Priority tag
+                                            val pillColor = when (item.priority) {
+                                                "High" -> Color(0xFFEF4444)
+                                                "Medium" -> Color(0xFFFBBF24)
+                                                else -> Color(0xFF10B981)
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .padding(end = 8.dp)
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(pillColor.copy(alpha = 0.15f))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = item.priority.uppercase(),
+                                                    color = pillColor,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+
                                             Text(
                                                 text = item.title,
                                                 color = if (item.isCompleted) Color(0x80FFFFFF) else Color.White,
@@ -1078,5 +1209,6 @@ fun SoundChip(
 data class TodoItem(
     val id: String,
     val title: String,
-    val isCompleted: Boolean
+    val isCompleted: Boolean,
+    val priority: String = "Medium"
 )

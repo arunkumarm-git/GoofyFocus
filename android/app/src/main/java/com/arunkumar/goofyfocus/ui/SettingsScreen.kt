@@ -14,7 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,23 +32,16 @@ import androidx.compose.ui.unit.sp
 import com.arunkumar.goofyfocus.TimerService
 import com.arunkumar.goofyfocus.MainActivity
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.OutputStreamWriter
-import java.net.HttpURLConnection
-import java.net.URL
+
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
@@ -65,12 +58,6 @@ fun SettingsScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    var isVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        isVisible = true
-    }
-
-    // Auto-save feedback pulse indicators (Jakob's Law UI feedback)
     var saveTrigger by remember { mutableStateOf(0) }
     val saveIndicatorColor by animateColorAsState(
         targetValue = if (saveTrigger > 0) Color(0xFF34D399) else Color(0x66FFFFFF),
@@ -86,11 +73,7 @@ fun SettingsScreen(
     }
 
     val handleBack = {
-        coroutineScope.launch {
-            isVisible = false
-            delay(250)
-            onBack()
-        }
+        onBack()
     }
 
     // Load active settings states
@@ -106,39 +89,12 @@ fun SettingsScreen(
     val premiumHours by TimerService.premiumHours.collectAsState()
 
     var selectedOption by remember { mutableStateOf("1 Month") }
-    var showPlayBillingSheet by remember { mutableStateOf(false) }
     var isProcessingPayment by remember { mutableStateOf(false) }
     var isCheckingProOnLogin by remember { mutableStateOf(false) }
     var pendingPurchaseOnLogin by remember { mutableStateOf(false) }
     
-    val billingManager = remember {
-        BillingManager(context, coroutineScope) { productId ->
-            val addedHours = when (productId) {
-                "goofyfocus_1month" -> 744 // 31 days
-                "goofyfocus_6months" -> 4464
-                "goofyfocus_1year" -> 8928
-                else -> 0
-            }
-            if (addedHours > 0) {
-                coroutineScope.launch {
-                    val sub = TimerService.googleUserSub.value ?: "guest"
-                    val email = TimerService.googleUserEmail.value ?: "guest"
-                    val name = TimerService.googleUserName.value
-                    val pic = TimerService.googleUserPicture.value
-                    val newHours = TimerService.premiumHours.value + addedHours
-                    val success = syncUserToSupabase(sub, email, name, pic, true, newHours)
-                    if (success) {
-                        TimerService.signInUserWithHours(context, sub, email, name, pic, newHours, System.currentTimeMillis())
-                        com.arunkumar.goofyfocus.audio.SoundSynthesizer.playSuccessSound()
-                        android.widget.Toast.makeText(context, "Subscription activated & synced to cloud! 🎉", android.widget.Toast.LENGTH_LONG).show()
-                    } else {
-                        android.widget.Toast.makeText(context, "Cloud sync failed. Local premium activated.", android.widget.Toast.LENGTH_LONG).show()
-                        TimerService.signInUserWithHours(context, sub, email, name, pic, newHours, System.currentTimeMillis())
-                    }
-                }
-            }
-        }
-    }
+    val activity = context as? MainActivity
+    val billingManager = activity?.billingManager
 
     val gso = remember {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -163,20 +119,30 @@ fun SettingsScreen(
                 
                 coroutineScope.launch {
                     isCheckingProOnLogin = true
-                    val existingPair = checkProStatusFromSupabase(email)
+                    val existingPair = TimerService.checkProStatusFromSupabase(email)
                     isCheckingProOnLogin = false
                     if (existingPair != null && existingPair.first > 0) {
                         TimerService.signInUserWithHours(context, sub, email, name, picture, existingPair.first, existingPair.second)
-                        syncUserToSupabase(sub, email, name, picture, true, existingPair.first)
+                        TimerService.syncUserToSupabase(sub, email, name, picture, true, existingPair.first)
                         com.arunkumar.goofyfocus.audio.SoundSynthesizer.playSuccessSound()
                         android.widget.Toast.makeText(context, "Welcome back! Premium restored. 🎉", android.widget.Toast.LENGTH_LONG).show()
                     } else {
                         TimerService.signInUser(context, sub, email, name, picture, null)
-                        syncUserToSupabase(sub, email, name, picture, false, 0)
+                        TimerService.syncUserToSupabase(sub, email, name, picture, false, 0)
                         if (pendingPurchaseOnLogin) {
-                            showPlayBillingSheet = true
+                            val activity = context as? Activity
+                            if (activity != null && billingManager != null) {
+                                val productId = when (selectedOption) {
+                                    "1 Month" -> "goofyfocus_1month"
+                                    "6 Months" -> "goofyfocus_6months"
+                                    else -> "goofyfocus_1year"
+                                }
+                                billingManager.launchBillingFlow(activity, productId, BillingClient.ProductType.SUBS)
+                            }
+                            pendingPurchaseOnLogin = false
                         } else {
                             android.widget.Toast.makeText(context, "Logged in successfully! 👤", android.widget.Toast.LENGTH_SHORT).show()
+                            billingManager?.queryActivePurchases()
                         }
                     }
                 }
@@ -285,104 +251,7 @@ fun SettingsScreen(
 
     // Mock dialog removed - using real Google Sign-in API on device
 
-    if (showPlayBillingSheet) {
-        AlertDialog(
-            onDismissRequest = { if (!isProcessingPayment) showPlayBillingSheet = false },
-            title = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Google Play Billing", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
-                    Text("Google Play", color = Color(0xFF34D399), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = "Subscribe to GoofyFocus Premium:",
-                        fontSize = 12.sp,
-                        color = Color(0xB3FFFFFF)
-                    )
-                    
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0x0CFFFFFF)),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = "GoofyFocus Premium - $selectedOption",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            val priceText = when (selectedOption) {
-                                "1 Month" -> "₹199.00 ($2.49) / Month"
-                                "6 Months" -> "₹925.00 ($11.49) / 6 Months"
-                                else -> "₹1,338.00 ($16.99) / Year"
-                            }
-                            Text(
-                                text = priceText,
-                                color = Color(0xFFFCD34D),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Account:", fontSize = 11.sp, color = Color(0x80FFFFFF))
-                        Text(googleUserEmail ?: "", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Payment Method:", fontSize = 11.sp, color = Color(0x80FFFFFF))
-                        Text("Visa •••• 4242", fontSize = 11.sp, color = Color.White)
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        com.arunkumar.goofyfocus.audio.SoundSynthesizer.playClickSound()
-                        val activity = context as? Activity
-                        if (activity != null) {
-                            val productId = when (selectedOption) {
-                                "1 Month" -> "goofyfocus_1month"
-                                "6 Months" -> "goofyfocus_6months"
-                                else -> "goofyfocus_1year"
-                            }
-                            billingManager.launchBillingFlow(activity, productId, BillingClient.ProductType.SUBS)
-                            showPlayBillingSheet = false
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFB7185)),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("Subscribe", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                if (!isProcessingPayment) {
-                    TextButton(onClick = { showPlayBillingSheet = false }) {
-                        Text("Cancel", color = Color(0x80FFFFFF))
-                    }
-                }
-            },
-            containerColor = Color(0xFF171415)
-        )
-    }
+    // Mock dialog removed - launching system Billing Client directly
 
     // Terms Dialog
     if (showTermsDialog) {
@@ -419,7 +288,7 @@ fun SettingsScreen(
                             isDeleting = true
                             val sub = googleUserSub
                             if (sub != null) {
-                                val success = deleteUserFromSupabase(sub)
+                                val success = TimerService.deleteUserFromSupabase(sub)
                                 if (success) {
                                     TimerService.signOutUser(context)
                                     showDeleteAccountDialog = false
@@ -471,11 +340,6 @@ fun SettingsScreen(
 
     // Ad dialog removed in favor of real AdMob flow.
 
-    AnimatedVisibility(
-        visible = isVisible,
-        enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
-        exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
-    ) {
         Scaffold(
         topBar = {
             TopAppBar(
@@ -486,7 +350,7 @@ fun SettingsScreen(
                         handleBack()
                     }) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
                             tint = Color.White
                         )
@@ -728,7 +592,7 @@ fun SettingsScreen(
                     
                     val optionsList = listOf(
                         Triple("1 Month", "₹199.00", "$2.49"),
-                        Triple("6 Months", "₹925.00", "$11.49"),
+                        Triple("6 Months", "₹925.00", "$10.99"),
                         Triple("1 Year", "₹1,338.00", "$16.99")
                     )
                     
@@ -852,7 +716,15 @@ fun SettingsScreen(
                                     pendingPurchaseOnLogin = true
                                     googleSignInLauncher.launch(googleSignInClient.signInIntent)
                                 } else {
-                                    showPlayBillingSheet = true
+                                    val activity = context as? Activity
+                                    if (activity != null && billingManager != null) {
+                                        val productId = when (selectedOption) {
+                                            "1 Month" -> "goofyfocus_1month"
+                                            "6 Months" -> "goofyfocus_6months"
+                                            else -> "goofyfocus_1year"
+                                        }
+                                        billingManager.launchBillingFlow(activity, productId, BillingClient.ProductType.SUBS)
+                                    }
                                 }
                             },
                             shape = RoundedCornerShape(12.dp),
@@ -981,7 +853,7 @@ fun SettingsScreen(
                             },
                             enabled = isPro,
                             valueRange = 5f..60f,
-                            steps = 11,
+                            steps = 10,
                             colors = SliderDefaults.colors(
                                 thumbColor = if (isPro) Color(0xFFFB7185) else Color.Gray,
                                 activeTrackColor = if (isPro) Color(0xFFFB7185) else Color.DarkGray,
@@ -1011,7 +883,7 @@ fun SettingsScreen(
                             },
                             enabled = isPro,
                             valueRange = 1f..20f,
-                            steps = 19,
+                            steps = 18,
                             colors = SliderDefaults.colors(
                                 thumbColor = if (isPro) Color(0xFFFB7185) else Color.Gray,
                                 activeTrackColor = if (isPro) Color(0xFFFB7185) else Color.DarkGray,
@@ -1041,7 +913,7 @@ fun SettingsScreen(
                             },
                             enabled = isPro,
                             valueRange = 5f..45f,
-                            steps = 8,
+                            steps = 7,
                             colors = SliderDefaults.colors(
                                 thumbColor = if (isPro) Color(0xFFFB7185) else Color.Gray,
                                 activeTrackColor = if (isPro) Color(0xFFFB7185) else Color.DarkGray,
@@ -1051,6 +923,116 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            // Sound & Media Section Header
+            Text(
+                text = "SOUND & MEDIA OPTIONS",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFFB7185),
+                letterSpacing = 1.5.sp
+            )
+
+            // Sound & Media Settings Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0x11FB7185)),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Color(0x26FB7185), RoundedCornerShape(16.dp))
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    val clickSoundEnabled by TimerService.isClickSoundEnabled.collectAsState()
+                    val breakSoundEnabled by TimerService.isBreakSoundEnabled.collectAsState()
+                    val breakGifEnabled by TimerService.isBreakGifEnabled.collectAsState()
+
+                    // Button Click Sounds
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Button Click Sounds", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text("Play a sound effect when clicking buttons", color = Color(0x80FFFFFF), fontSize = 11.sp)
+                        }
+                        Switch(
+                            checked = clickSoundEnabled,
+                            onCheckedChange = {
+                                TimerService.setClickSoundEnabled(context, it)
+                                if (it) {
+                                    com.arunkumar.goofyfocus.audio.SoundSynthesizer.playClickSound()
+                                }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color(0xFFFB7185),
+                                checkedTrackColor = Color(0x66FB7185),
+                                uncheckedThumbColor = Color.Gray,
+                                uncheckedTrackColor = Color.DarkGray
+                            )
+                        )
+                    }
+
+                    HorizontalDivider(color = Color(0x1AFFFFFF), thickness = 1.dp)
+
+                    // Break Sounds
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Break Ambient Sounds", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text("Play soothing background sounds during breaks", color = Color(0x80FFFFFF), fontSize = 11.sp)
+                        }
+                        Switch(
+                            checked = breakSoundEnabled,
+                            onCheckedChange = {
+                                TimerService.setBreakSoundEnabled(context, it)
+                                com.arunkumar.goofyfocus.audio.SoundSynthesizer.playClickSound()
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color(0xFFFB7185),
+                                checkedTrackColor = Color(0x66FB7185),
+                                uncheckedThumbColor = Color.Gray,
+                                uncheckedTrackColor = Color.DarkGray
+                            )
+                        )
+                    }
+
+                    HorizontalDivider(color = Color(0x1AFFFFFF), thickness = 1.dp)
+
+                    // Break GIF
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Break Animations/GIFs", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text("Show animations during your breaks", color = Color(0x80FFFFFF), fontSize = 11.sp)
+                        }
+                        Switch(
+                            checked = breakGifEnabled,
+                            onCheckedChange = {
+                                TimerService.setBreakGifEnabled(context, it)
+                                com.arunkumar.goofyfocus.audio.SoundSynthesizer.playClickSound()
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color(0xFFFB7185),
+                                checkedTrackColor = Color(0x66FB7185),
+                                uncheckedThumbColor = Color.Gray,
+                                uncheckedTrackColor = Color.DarkGray
+                            )
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Custom Media Section Header
             Text(
@@ -1480,7 +1462,7 @@ fun SettingsScreen(
                             coroutineScope.launch {
                                 isSubmittingFeedback = true
                                 feedbackStatus = "Sending..."
-                                val success = sendFeedbackToSupabase(rating, feedbackMessage)
+                                val success = TimerService.sendFeedbackToSupabase(rating, feedbackMessage)
                                 isSubmittingFeedback = false
                                 if (success) {
                                     feedbackStatus = "✓ Thanks for your feedback!"
@@ -1590,291 +1572,4 @@ fun SettingsScreen(
         }
     }
 }
-}
 
-private suspend fun syncUserToSupabase(
-    sub: String,
-    email: String,
-    name: String?,
-    picture: String?,
-    isPro: Boolean,
-    hours: Int
-): Boolean {
-    return withContext(Dispatchers.IO) {
-        var attempts = 0
-        val maxAttempts = 3
-        var success = false
-        
-        while (attempts < maxAttempts && !success) {
-            attempts++
-            var conn: HttpURLConnection? = null
-            try {
-                val url = URL("https://nqshkkzrnsafnfvujanr.supabase.co/rest/v1/users?on_conflict=google_sub")
-                conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.connectTimeout = 10000
-                conn.readTimeout = 10000
-                conn.setRequestProperty("apikey", "sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
-                conn.setRequestProperty("Authorization", "Bearer sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
-                conn.setRequestProperty("Content-Type", "application/json")
-                conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
-                conn.doOutput = true
-                
-                val cleanName = name ?: "Google User"
-                val jsonBody = """
-                    {
-                        "google_sub": "$sub",
-                        "email": "$email",
-                        "given_name": "$cleanName",
-                        "picture_url": "${picture ?: ""}",
-                        "is_pro": $isPro,
-                        "premium_hours": $hours,
-                        "last_premium_sync_at": ${if (isPro) "\"now()\"" else "null"},
-                        "platform": "Mobile",
-                        "last_seen_at": "now()"
-                    }
-                """.trimIndent()
-                
-                OutputStreamWriter(conn.outputStream).use { writer ->
-                    writer.write(jsonBody)
-                    writer.flush()
-                }
-                
-                val responseCode = conn.responseCode
-                if (responseCode in 200..299) {
-                    success = true
-                } else {
-                    val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-                    android.util.Log.e("Supabase", "syncUserToSupabase failed on attempt $attempts with code $responseCode: $errorText")
-                    if (responseCode in 400..499 && responseCode != 429) {
-                        break
-                    }
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("Supabase", "syncUserToSupabase exception on attempt $attempts: ${e.message}", e)
-                if (attempts >= maxAttempts) {
-                    break
-                }
-            } finally {
-                conn?.disconnect()
-            }
-            if (!success && attempts < maxAttempts) {
-                kotlinx.coroutines.delay(2000L * attempts)
-            }
-        }
-        success
-    }
-}
-
-private suspend fun checkProStatusFromSupabase(email: String): Pair<Int, Long>? {
-    return withContext(Dispatchers.IO) {
-        var attempts = 0
-        val maxAttempts = 3
-        var result: Pair<Int, Long>? = null
-        var shouldRetry = true
-        
-        while (attempts < maxAttempts && shouldRetry && result == null) {
-            attempts++
-            var conn: HttpURLConnection? = null
-            try {
-                val url = URL("https://nqshkkzrnsafnfvujanr.supabase.co/rest/v1/users?email=eq.$email")
-                conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "GET"
-                conn.connectTimeout = 10000
-                conn.readTimeout = 10000
-                conn.setRequestProperty("apikey", "sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
-                conn.setRequestProperty("Authorization", "Bearer sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
-                conn.setRequestProperty("Accept", "application/json")
-                
-                val responseCode = conn.responseCode
-                if (responseCode in 200..299) {
-                    val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-                    
-                    val rows = responseText.split(Regex("\\},\\s*\\{"))
-                    var maxHours = 0
-                    var bestSyncTime = 0L
-                    var foundPro = false
-                    
-                    for (row in rows) {
-                        if (row.contains("\"is_pro\":true") || row.contains("\"is_pro\": true")) {
-                            foundPro = true
-                            var hours = 0
-                            val hoursMarker = "\"premium_hours\""
-                            val markerIdx = row.indexOf(hoursMarker)
-                            if (markerIdx != -1) {
-                                var idx = markerIdx + hoursMarker.length
-                                while (idx < row.length && (row[idx] == ' ' || row[idx] == ':')) {
-                                    idx++
-                                }
-                                val start = idx
-                                var end = start
-                                while (end < row.length && (row[end].isDigit() || row[end] == '-')) {
-                                    end++
-                                }
-                                hours = row.substring(start, end).toIntOrNull() ?: 0
-                            }
-                            
-                            var syncTime = System.currentTimeMillis()
-                            val syncMarker = "\"last_premium_sync_at\""
-                            val sMarkerIdx = row.indexOf(syncMarker)
-                            if (sMarkerIdx != -1) {
-                                var idx = sMarkerIdx + syncMarker.length
-                                while (idx < row.length && (row[idx] == ' ' || row[idx] == ':' || row[idx] == '"')) {
-                                    idx++
-                                }
-                                val start = idx
-                                var end = start
-                                while (end < row.length && row[end] != '"') {
-                                    end++
-                                }
-                                val timeStr = row.substring(start, end)
-                                try {
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                        val instant = java.time.Instant.parse(timeStr)
-                                        syncTime = instant.toEpochMilli()
-                                    } else {
-                                        syncTime = System.currentTimeMillis()
-                                    }
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
-                            }
-                            
-                            if (hours > maxHours || (hours == maxHours && syncTime > bestSyncTime)) {
-                                maxHours = hours
-                                bestSyncTime = syncTime
-                            }
-                        }
-                    }
-                    
-                    if (foundPro) {
-                        result = Pair(maxHours, bestSyncTime)
-                    } else {
-                        shouldRetry = false // Valid response, just not pro
-                    }
-                } else {
-                    val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-                    android.util.Log.e("Supabase", "checkProStatusFromSupabase failed on attempt $attempts with code $responseCode: $errorText")
-                    if (responseCode in 400..499 && responseCode != 429) {
-                        shouldRetry = false
-                    }
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("Supabase", "checkProStatusFromSupabase exception on attempt $attempts: ${e.message}", e)
-                if (attempts >= maxAttempts) {
-                    shouldRetry = false
-                }
-            } finally {
-                conn?.disconnect()
-            }
-            if (result == null && shouldRetry && attempts < maxAttempts) {
-                kotlinx.coroutines.delay(2000L * attempts)
-            }
-        }
-        result
-    }
-}
-
-private suspend fun sendFeedbackToSupabase(rating: Int, message: String): Boolean {
-    return withContext(Dispatchers.IO) {
-        var attempts = 0
-        val maxAttempts = 3
-        var success = false
-        
-        while (attempts < maxAttempts && !success) {
-            attempts++
-            var conn: HttpURLConnection? = null
-            try {
-                val url = URL("https://nqshkkzrnsafnfvujanr.supabase.co/rest/v1/feedback")
-                conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.connectTimeout = 10000
-                conn.readTimeout = 10000
-                conn.setRequestProperty("apikey", "sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
-                conn.setRequestProperty("Authorization", "Bearer sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
-                conn.setRequestProperty("Content-Type", "application/json")
-                conn.setRequestProperty("Prefer", "return=minimal")
-                conn.doOutput = true
-                
-                val jsonBody = """
-                    {
-                        "email": "android-user",
-                        "rating": $rating,
-                        "message": "${message.replace("\"", "\\\"").replace("\n", "\\n")}"
-                    }
-                """.trimIndent()
-                
-                OutputStreamWriter(conn.outputStream).use { writer ->
-                    writer.write(jsonBody)
-                    writer.flush()
-                }
-                
-                val responseCode = conn.responseCode
-                if (responseCode in 200..299) {
-                    success = true
-                } else {
-                    val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-                    android.util.Log.e("Supabase", "sendFeedbackToSupabase failed on attempt $attempts with code $responseCode: $errorText")
-                    if (responseCode in 400..499 && responseCode != 429) {
-                        break
-                    }
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("Supabase", "sendFeedbackToSupabase exception on attempt $attempts: ${e.message}", e)
-                if (attempts >= maxAttempts) {
-                    break
-                }
-            } finally {
-                conn?.disconnect()
-            }
-            if (!success && attempts < maxAttempts) {
-                kotlinx.coroutines.delay(2000L * attempts)
-            }
-        }
-        success
-    }
-}
-
-private suspend fun deleteUserFromSupabase(sub: String): Boolean {
-    return withContext(Dispatchers.IO) {
-        var attempts = 0
-        val maxAttempts = 3
-        var success = false
-        
-        while (attempts < maxAttempts && !success) {
-            attempts++
-            var conn: HttpURLConnection? = null
-            try {
-                val url = URL("https://nqshkkzrnsafnfvujanr.supabase.co/rest/v1/users?google_sub=eq.$sub")
-                conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "DELETE"
-                conn.connectTimeout = 10000
-                conn.readTimeout = 10000
-                conn.setRequestProperty("apikey", "sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
-                conn.setRequestProperty("Authorization", "Bearer sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
-                
-                val responseCode = conn.responseCode
-                if (responseCode in 200..299) {
-                    success = true
-                } else {
-                    val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-                    android.util.Log.e("Supabase", "deleteUserFromSupabase failed on attempt $attempts with code $responseCode: $errorText")
-                    if (responseCode in 400..499 && responseCode != 429) {
-                        break
-                    }
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("Supabase", "deleteUserFromSupabase exception on attempt $attempts: ${e.message}", e)
-                if (attempts >= maxAttempts) {
-                    break
-                }
-            } finally {
-                conn?.disconnect()
-            }
-            if (!success && attempts < maxAttempts) {
-                kotlinx.coroutines.delay(2000L * attempts)
-            }
-        }
-        success
-    }
-}

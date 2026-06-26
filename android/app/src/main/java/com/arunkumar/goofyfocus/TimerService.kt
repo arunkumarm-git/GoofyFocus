@@ -16,6 +16,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 
 class TimerService : Service() {
 
@@ -145,6 +149,10 @@ class TimerService : Service() {
         googleUserPicture.value = prefs.getString("GOOGLE_USER_PICTURE", null)
         premiumDuration.value = prefs.getString("PREMIUM_DURATION", null)
         
+        isClickSoundEnabled.value = prefs.getBoolean("IS_CLICK_SOUND_ENABLED", true)
+        isBreakSoundEnabled.value = prefs.getBoolean("IS_BREAK_SOUND_ENABLED", true)
+        isBreakGifEnabled.value = prefs.getBoolean("IS_BREAK_GIF_ENABLED", true)
+        
         val pHours = prefs.getInt("PREMIUM_HOURS", 0)
         val pSync = prefs.getLong("LAST_PREMIUM_SYNC_AT", 0L)
         premiumHours.value = pHours
@@ -263,7 +271,12 @@ class TimerService : Service() {
         
         if (currentPhase.value == "Work") {
             sessionsCompleted.value += 1
-            addXp(this, 20) // Award +20 XP on work session completion
+            if (wasRunning) {
+                addXp(this, 20) // Award +20 XP on work session completion only if it was running
+                lastSessionEarnedXp.value = true
+            } else {
+                lastSessionEarnedXp.value = false
+            }
             currentPhase.value = decideBreak()
             remainingSecs.value = getDurationForPhase(currentPhase.value)
             totalSecs.value = remainingSecs.value
@@ -500,6 +513,10 @@ class TimerService : Service() {
         val premiumDuration = MutableStateFlow<String?>(null)
         val premiumHours = MutableStateFlow(0)
         val lastPremiumSyncAt = MutableStateFlow(0L)
+        val lastSessionEarnedXp = MutableStateFlow(false)
+        val isClickSoundEnabled = MutableStateFlow(true)
+        val isBreakSoundEnabled = MutableStateFlow(true)
+        val isBreakGifEnabled = MutableStateFlow(true)
 
         fun signInUser(context: Context, sub: String, email: String, name: String?, picture: String?, duration: String?) {
             googleUserSub.value = sub
@@ -576,6 +593,7 @@ class TimerService : Service() {
                 remove("PREMIUM_DURATION")
                 remove("PREMIUM_HOURS")
                 remove("LAST_PREMIUM_SYNC_AT")
+                remove("LAST_CREDITED_ORDER_ID")
                 apply()
             }
         }
@@ -658,6 +676,311 @@ class TimerService : Service() {
             mascotType.value = type
             val prefs = context.getSharedPreferences("GoofyFocusPrefs", Context.MODE_PRIVATE)
             prefs.edit().putString("MASCOT_TYPE", type).apply()
+        }
+
+        fun setClickSoundEnabled(context: Context, enabled: Boolean) {
+            isClickSoundEnabled.value = enabled
+            val prefs = context.getSharedPreferences("GoofyFocusPrefs", Context.MODE_PRIVATE)
+            prefs.edit().putBoolean("IS_CLICK_SOUND_ENABLED", enabled).apply()
+        }
+
+        fun setBreakSoundEnabled(context: Context, enabled: Boolean) {
+            isBreakSoundEnabled.value = enabled
+            val prefs = context.getSharedPreferences("GoofyFocusPrefs", Context.MODE_PRIVATE)
+            prefs.edit().putBoolean("IS_BREAK_SOUND_ENABLED", enabled).apply()
+        }
+
+        fun setBreakGifEnabled(context: Context, enabled: Boolean) {
+            isBreakGifEnabled.value = enabled
+            val prefs = context.getSharedPreferences("GoofyFocusPrefs", Context.MODE_PRIVATE)
+            prefs.edit().putBoolean("IS_BREAK_GIF_ENABLED", enabled).apply()
+        }
+
+        suspend fun syncUserToSupabase(
+            sub: String,
+            email: String,
+            name: String?,
+            picture: String?,
+            isPro: Boolean,
+            hours: Int
+        ): Boolean {
+            return withContext(Dispatchers.IO) {
+                var attempts = 0
+                val maxAttempts = 3
+                var success = false
+                
+                while (attempts < maxAttempts && !success) {
+                    attempts++
+                    var conn: HttpURLConnection? = null
+                    try {
+                        val url = URL("https://nqshkkzrnsafnfvujanr.supabase.co/rest/v1/users?on_conflict=google_sub")
+                        conn = url.openConnection() as HttpURLConnection
+                        conn.requestMethod = "POST"
+                        conn.connectTimeout = 10000
+                        conn.readTimeout = 10000
+                        conn.setRequestProperty("apikey", "sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
+                        conn.setRequestProperty("Authorization", "Bearer sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
+                        conn.setRequestProperty("Content-Type", "application/json")
+                        conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
+                        conn.doOutput = true
+                        
+                        val cleanName = name ?: "Google User"
+                        val jsonBody = """
+                            {
+                                "google_sub": "$sub",
+                                "email": "$email",
+                                "given_name": "$cleanName",
+                                "picture_url": "${picture ?: ""}",
+                                "is_pro": $isPro,
+                                "premium_hours": $hours,
+                                "last_premium_sync_at": ${if (isPro) "\"now()\"" else "null"},
+                                "platform": "Mobile",
+                                "last_seen_at": "now()"
+                            }
+                        """.trimIndent()
+                        
+                        OutputStreamWriter(conn.outputStream).use { writer ->
+                            writer.write(jsonBody)
+                            writer.flush()
+                        }
+                        
+                        val responseCode = conn.responseCode
+                        if (responseCode in 200..299) {
+                            success = true
+                        } else {
+                            val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                            android.util.Log.e("Supabase", "syncUserToSupabase failed on attempt $attempts with code $responseCode: $errorText")
+                            if (responseCode in 400..499 && responseCode != 429) {
+                                break
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("Supabase", "syncUserToSupabase exception on attempt $attempts: ${e.message}", e)
+                        if (attempts >= maxAttempts) {
+                            break
+                        }
+                    } finally {
+                        conn?.disconnect()
+                    }
+                    if (!success && attempts < maxAttempts) {
+                        kotlinx.coroutines.delay(2000L * attempts)
+                    }
+                }
+                success
+            }
+        }
+
+        suspend fun checkProStatusFromSupabase(email: String): Pair<Int, Long>? {
+            return withContext(Dispatchers.IO) {
+                var attempts = 0
+                val maxAttempts = 3
+                var result: Pair<Int, Long>? = null
+                var shouldRetry = true
+                
+                while (attempts < maxAttempts && shouldRetry && result == null) {
+                    attempts++
+                    var conn: HttpURLConnection? = null
+                    try {
+                        val url = URL("https://nqshkkzrnsafnfvujanr.supabase.co/rest/v1/users?email=eq.$email")
+                        conn = url.openConnection() as HttpURLConnection
+                        conn.requestMethod = "GET"
+                        conn.connectTimeout = 10000
+                        conn.readTimeout = 10000
+                        conn.setRequestProperty("apikey", "sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
+                        conn.setRequestProperty("Authorization", "Bearer sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
+                        conn.setRequestProperty("Accept", "application/json")
+                        
+                        val responseCode = conn.responseCode
+                        if (responseCode in 200..299) {
+                            val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                            
+                            val rows = responseText.split(Regex("\\},\\s*\\{"))
+                            var maxHours = 0
+                            var bestSyncTime = 0L
+                            var foundPro = false
+                            
+                            for (row in rows) {
+                                if (row.contains("\"is_pro\":true") || row.contains("\"is_pro\": true")) {
+                                    foundPro = true
+                                    var hours = 0
+                                    val hoursMarker = "\"premium_hours\""
+                                    val markerIdx = row.indexOf(hoursMarker)
+                                    if (markerIdx != -1) {
+                                        var idx = markerIdx + hoursMarker.length
+                                        while (idx < row.length && (row[idx] == ' ' || row[idx] == ':')) {
+                                            idx++
+                                        }
+                                        val start = idx
+                                        var end = start
+                                        while (end < row.length && (row[end].isDigit() || row[end] == '-')) {
+                                            end++
+                                        }
+                                        hours = row.substring(start, end).toIntOrNull() ?: 0
+                                    }
+                                    
+                                    var syncTime = System.currentTimeMillis()
+                                    val syncMarker = "\"last_premium_sync_at\""
+                                    val sMarkerIdx = row.indexOf(syncMarker)
+                                    if (sMarkerIdx != -1) {
+                                        var idx = sMarkerIdx + syncMarker.length
+                                        while (idx < row.length && (row[idx] == ' ' || row[idx] == ':' || row[idx] == '"')) {
+                                            idx++
+                                        }
+                                        val start = idx
+                                        var end = start
+                                        while (end < row.length && row[end] != '"') {
+                                            end++
+                                        }
+                                        val timeStr = row.substring(start, end)
+                                        try {
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                                val instant = java.time.Instant.parse(timeStr)
+                                                syncTime = instant.toEpochMilli()
+                                            } else {
+                                                syncTime = System.currentTimeMillis()
+                                            }
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                        }
+                                    }
+                                    
+                                    if (hours > maxHours || (hours == maxHours && syncTime > bestSyncTime)) {
+                                        maxHours = hours
+                                        bestSyncTime = syncTime
+                                    }
+                                }
+                            }
+                            
+                            if (foundPro) {
+                                result = Pair(maxHours, bestSyncTime)
+                            } else {
+                                shouldRetry = false
+                            }
+                        } else {
+                            val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                            android.util.Log.e("Supabase", "checkProStatusFromSupabase failed on attempt $attempts with code $responseCode: $errorText")
+                            if (responseCode in 400..499 && responseCode != 429) {
+                                shouldRetry = false
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("Supabase", "checkProStatusFromSupabase exception on attempt $attempts: ${e.message}", e)
+                        if (attempts >= maxAttempts) {
+                            shouldRetry = false
+                        }
+                    } finally {
+                        conn?.disconnect()
+                    }
+                    if (result == null && shouldRetry && attempts < maxAttempts) {
+                        kotlinx.coroutines.delay(2000L * attempts)
+                    }
+                }
+                result
+            }
+        }
+
+        suspend fun deleteUserFromSupabase(sub: String): Boolean {
+            return withContext(Dispatchers.IO) {
+                var attempts = 0
+                val maxAttempts = 3
+                var success = false
+                
+                while (attempts < maxAttempts && !success) {
+                    attempts++
+                    var conn: HttpURLConnection? = null
+                    try {
+                        val url = URL("https://nqshkkzrnsafnfvujanr.supabase.co/rest/v1/users?google_sub=eq.$sub")
+                        conn = url.openConnection() as HttpURLConnection
+                        conn.requestMethod = "DELETE"
+                        conn.connectTimeout = 10000
+                        conn.readTimeout = 10000
+                        conn.setRequestProperty("apikey", "sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
+                        conn.setRequestProperty("Authorization", "Bearer sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
+                        
+                        val responseCode = conn.responseCode
+                        if (responseCode in 200..299) {
+                            success = true
+                        } else {
+                            val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                            android.util.Log.e("Supabase", "deleteUserFromSupabase failed on attempt $attempts with code $responseCode: $errorText")
+                            if (responseCode in 400..499 && responseCode != 429) {
+                                break
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("Supabase", "deleteUserFromSupabase exception on attempt $attempts: ${e.message}", e)
+                        if (attempts >= maxAttempts) {
+                            break
+                        }
+                    } finally {
+                        conn?.disconnect()
+                    }
+                    if (!success && attempts < maxAttempts) {
+                        kotlinx.coroutines.delay(2000L * attempts)
+                    }
+                }
+                success
+            }
+        }
+
+        suspend fun sendFeedbackToSupabase(rating: Int, message: String): Boolean {
+            return withContext(Dispatchers.IO) {
+                var attempts = 0
+                val maxAttempts = 3
+                var success = false
+                
+                while (attempts < maxAttempts && !success) {
+                    attempts++
+                    var conn: HttpURLConnection? = null
+                    try {
+                        val url = URL("https://nqshkkzrnsafnfvujanr.supabase.co/rest/v1/feedback")
+                        conn = url.openConnection() as HttpURLConnection
+                        conn.requestMethod = "POST"
+                        conn.connectTimeout = 10000
+                        conn.readTimeout = 10000
+                        conn.setRequestProperty("apikey", "sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
+                        conn.setRequestProperty("Authorization", "Bearer sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
+                        conn.setRequestProperty("Content-Type", "application/json")
+                        conn.setRequestProperty("Prefer", "return=minimal")
+                        conn.doOutput = true
+                        
+                        val jsonBody = """
+                            {
+                                "email": "android-user",
+                                "rating": $rating,
+                                "message": "${message.replace("\"", "\\\"").replace("\n", "\\n")}"
+                            }
+                        """.trimIndent()
+                        
+                        OutputStreamWriter(conn.outputStream).use { writer ->
+                            writer.write(jsonBody)
+                            writer.flush()
+                        }
+                        
+                        val responseCode = conn.responseCode
+                        if (responseCode in 200..299) {
+                            success = true
+                        } else {
+                            val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                            android.util.Log.e("Supabase", "sendFeedbackToSupabase failed on attempt $attempts with code $responseCode: $errorText")
+                            if (responseCode in 400..499 && responseCode != 429) {
+                                break
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("Supabase", "sendFeedbackToSupabase exception on attempt $attempts: ${e.message}", e)
+                        if (attempts >= maxAttempts) {
+                            break
+                        }
+                    } finally {
+                        conn?.disconnect()
+                    }
+                    if (!success && attempts < maxAttempts) {
+                        kotlinx.coroutines.delay(2000L * attempts)
+                    }
+                }
+                success
+            }
         }
     }
 }
