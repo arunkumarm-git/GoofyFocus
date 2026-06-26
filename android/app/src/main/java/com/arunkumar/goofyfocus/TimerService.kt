@@ -78,33 +78,58 @@ class TimerService : Service() {
     }
 
     private suspend fun syncUserHoursToSupabase(sub: String, hours: Int) {
-        try {
-            val url = java.net.URL("https://nqshkkzrnsafnfvujanr.supabase.co/rest/v1/users?google_sub=eq.$sub")
-            val conn = url.openConnection() as java.net.HttpURLConnection
-            conn.requestMethod = "PATCH"
-            conn.connectTimeout = 10000
-            conn.readTimeout = 10000
-            conn.setRequestProperty("apikey", "sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
-            conn.setRequestProperty("Authorization", "Bearer sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.doOutput = true
-            
-            val jsonBody = """
-                {
-                    "premium_hours": $hours,
-                    "last_premium_sync_at": "now()",
-                    "platform": "Mobile"
+        var attempts = 0
+        val maxAttempts = 3
+        var success = false
+        
+        while (attempts < maxAttempts && !success) {
+            attempts++
+            var conn: java.net.HttpURLConnection? = null
+            try {
+                val url = java.net.URL("https://nqshkkzrnsafnfvujanr.supabase.co/rest/v1/users?google_sub=eq.$sub")
+                conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "PATCH"
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+                conn.setRequestProperty("apikey", "sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
+                conn.setRequestProperty("Authorization", "Bearer sb_publishable_O-jmtJ8nx11HO0kR8D7mzw_uVsyRqFq")
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                
+                val jsonBody = """
+                    {
+                        "premium_hours": $hours,
+                        "last_premium_sync_at": "now()",
+                        "platform": "Mobile"
+                    }
+                """.trimIndent()
+                
+                java.io.OutputStreamWriter(conn.outputStream).use { writer ->
+                    writer.write(jsonBody)
+                    writer.flush()
                 }
-            """.trimIndent()
-            
-            java.io.OutputStreamWriter(conn.outputStream).use { writer ->
-                writer.write(jsonBody)
-                writer.flush()
+                
+                val responseCode = conn.responseCode
+                if (responseCode in 200..299) {
+                    success = true
+                } else {
+                    val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                    android.util.Log.e("Supabase", "syncUserHoursToSupabase failed on attempt $attempts with code $responseCode: $errorText")
+                    if (responseCode in 400..499 && responseCode != 429) {
+                        break
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("Supabase", "syncUserHoursToSupabase exception on attempt $attempts: ${e.message}", e)
+                if (attempts >= maxAttempts) {
+                    break
+                }
+            } finally {
+                conn?.disconnect()
             }
-            conn.responseCode
-            conn.disconnect()
-        } catch (e: Exception) {
-            e.printStackTrace()
+            if (!success && attempts < maxAttempts) {
+                kotlinx.coroutines.delay(2000L * attempts)
+            }
         }
     }
 
