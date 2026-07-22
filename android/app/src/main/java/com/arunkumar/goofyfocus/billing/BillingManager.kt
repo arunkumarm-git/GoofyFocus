@@ -17,7 +17,11 @@ class BillingManager(
 
     private val billingClient = BillingClient.newBuilder(context)
         .setListener(this)
-        .enablePendingPurchases()
+        .enablePendingPurchases(
+            PendingPurchasesParams.newBuilder()
+                .enableOneTimeProducts()
+                .build()
+        )
         .build()
 
     private var retryCount = 0
@@ -95,10 +99,11 @@ class BillingManager(
             .build()
 
         android.util.Log.d("BillingManager", "Querying product details for $productId...")
-        billingClient.queryProductDetailsAsync(params) { billingResult, productDetailsList ->
+        billingClient.queryProductDetailsAsync(params) { billingResult, queryProductDetailsResult ->
             val responseCode = billingResult.responseCode
             if (responseCode == BillingClient.BillingResponseCode.OK) {
-                if (productDetailsList.isNotEmpty()) {
+                val productDetailsList = queryProductDetailsResult.productDetailsList
+                if (!productDetailsList.isNullOrEmpty()) {
                     val productDetails = productDetailsList[0]
                     android.util.Log.d("BillingManager", "Product details queried successfully: ${productDetails.name}")
                     
@@ -231,9 +236,9 @@ class BillingManager(
             .setProductType(BillingClient.ProductType.SUBS)
             .build()
 
-        billingClient.queryPurchasesAsync(params) { billingResult, purchasesList ->
+        billingClient.queryPurchasesAsync(params) { billingResult, purchases ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                for (purchase in purchasesList) {
+                for (purchase in purchases) {
                     if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
                         handlePurchase(purchase)
                     }

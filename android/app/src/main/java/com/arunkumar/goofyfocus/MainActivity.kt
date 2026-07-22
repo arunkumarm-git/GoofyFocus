@@ -40,6 +40,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.analytics.analytics
 import com.google.firebase.crashlytics.crashlytics
 import com.arunkumar.goofyfocus.billing.BillingManager
+import com.arunkumar.goofyfocus.notification.DailyNotificationScheduler
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
@@ -100,6 +101,9 @@ class MainActivity : ComponentActivity() {
         billingManager = BillingManager(applicationContext, lifecycleScope) { productId ->
             handlePurchaseCompleted(productId)
         }
+
+        // Schedule 2x daily notifications via WorkManager
+        DailyNotificationScheduler.scheduleDailyNotifications(applicationContext)
         
         hasOverlayPermission.value = android.provider.Settings.canDrawOverlays(this)
         

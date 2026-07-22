@@ -39,8 +39,8 @@ android {
         applicationId = "com.arunkumar.goofyfocus"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 5
+        versionName = "1.0.4"
     }
 
     buildTypes {
@@ -82,6 +82,7 @@ dependencies {
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity.compose)
+  implementation(libs.androidx.work.runtime.ktx)
 
   // Arch Components
   implementation(libs.androidx.lifecycle.runtime.compose)
